@@ -11,6 +11,8 @@ from . import theme as T
 def _fig(title: str = "", height: int = 320) -> go.Figure:
     fig = go.Figure()
     fig.update_layout(**T.PLOT_LAYOUT, height=height, title=dict(text=title, x=0, font=dict(size=14, color=T.INK)))
+    if not title:
+        fig.update_layout(margin=dict(l=10, r=20, t=14, b=10))
     return fig
 
 
@@ -19,7 +21,7 @@ def class_distribution(df: pd.DataFrame, title: str) -> go.Figure:
     fig = _fig(title, 300)
     fig.add_bar(y=[f"{T.CLASS_ICONS[c]} {c}" for c in counts.index], x=counts.values, orientation="h",
                 marker=dict(color=[T.CLASS_COLORS[c] for c in counts.index], line=dict(color=T.PANEL, width=2)),
-                text=counts.values, textposition="outside", cliponaxis=False,
+                text=counts.values, textposition="outside", cliponaxis=False, textfont=dict(color=T.INK),
                 hovertemplate="%{y}: %{x}<extra></extra>")
     fig.update_layout(yaxis=dict(autorange="reversed", gridcolor=T.BORDER, automargin=True),
                       xaxis=dict(title="observations", range=[0, max(counts.max(), 1) * 1.15], gridcolor=T.BORDER),
@@ -107,8 +109,8 @@ def availability_strip(states: pd.DataFrame, title: str) -> go.Figure:
     z = states.apply(lambda s: s.map(code)).T.to_numpy(dtype=float)
     fig = _fig(title, 60 + 34 * len(states.columns))
     fig.add_heatmap(z=z, x=states.index, y=list(states.columns), zmin=0, zmax=2, showscale=False,
-                    colorscale=[[0, "#cfe8cf"], [0.33, "#cfe8cf"], [0.34, "#fbd38d"], [0.66, "#fbd38d"],
-                                [0.67, "#9a9893"], [1, "#9a9893"]],
+                    colorscale=[[0, "#1f7a4a"], [0.33, "#1f7a4a"], [0.34, "#b7791f"], [0.66, "#b7791f"],
+                                [0.67, "#475569"], [1, "#475569"]],
                     customdata=states.T.to_numpy(), hovertemplate="%{y}<br>%{x}<br>%{customdata}<extra></extra>",
                     xgap=1, ygap=2)
     fig.update_layout(yaxis=dict(autorange="reversed"), xaxis=dict(showgrid=False))
@@ -119,8 +121,8 @@ def confusion(tp, fp, fn, tn, title: str) -> go.Figure:
     z = np.array([[tn, fp], [fn, tp]], dtype=float)
     fig = _fig(title, 260)
     fig.add_heatmap(z=z, x=["no alert", "alert"], y=["negative", "positive"], showscale=False,
-                    colorscale=[[0, "#fcfcfb"], [0.3, "#cde2fb"], [0.6, "#3987e5"], [1, "#0d366b"]],
-                    text=z.astype(int), texttemplate="%{text}", textfont=dict(size=14),
+                    colorscale=T.COUNT_RAMP, text=z.astype(int), texttemplate="%{text}",
+                    textfont=dict(size=15, color="#ffffff"),
                     hovertemplate="label %{y}<br>prediction %{x}<br>%{z:.0f}<extra></extra>")
     fig.update_layout(xaxis=dict(side="bottom", showgrid=False), yaxis=dict(autorange="reversed", showgrid=False))
     return fig
@@ -171,4 +173,80 @@ def box_by(df: pd.DataFrame, x: str, y: str, title: str, ytitle: str) -> go.Figu
             {"Environmental": "environmental", "Workforce": "workforce_exposure", "Clinical": "clinical",
              "Absenteeism": "absenteeism", "Incidents": "incidents"}.get(str(name), ""), T.INK_2), boxmean=True)
     fig.update_layout(yaxis_title=ytitle, showlegend=False)
+    return fig
+
+
+# ----------------------------------------------------------------------------------- overview widgets
+def site_risk_trend(df: pd.DataFrame, title: str) -> go.Figure:
+    """Daily maximum risk score per site (NA days stay gaps)."""
+    fig = _fig(title, 330)
+    d = df.groupby(["site_id", "observation_date"])["risk_score"].max().reset_index()
+    colors = ["#3987e5", "#d95926", "#199e70"]
+    for (site, g), c in zip(d.groupby("site_id"), colors):
+        fig.add_scatter(x=g["observation_date"], y=g["risk_score"], mode="lines", name=f"{site} daily max",
+                        line=dict(color=c, width=2), connectgaps=False,
+                        hovertemplate=f"{site} %{{x|%d %b}}: %{{y:.1f}}<extra></extra>")
+    fig.update_layout(yaxis=dict(range=[0, 105], gridcolor=T.BORDER, title="risk score"))
+    return fig
+
+
+def zone_heatmap(df: pd.DataFrame, title: str) -> go.Figure:
+    """Zone x day heatmap of the daily maximum risk score; blank = no score (insufficient evidence)."""
+    p = df.pivot_table(index="zone_id", columns="observation_date", values="risk_score", aggfunc="max")
+    fig = _fig(title, 330)
+    fig.add_heatmap(z=p.to_numpy(), x=p.columns, y=p.index, zmin=0, zmax=100, colorscale=T.RISK_RAMP,
+                    xgap=1, ygap=2, colorbar=dict(title=dict(text="risk", side="top", font=dict(color=T.INK_2, size=11)), thickness=10,
+                                                  tickfont=dict(color=T.INK_2), outlinewidth=0),
+                    hovertemplate="%{y} · %{x|%d %b}<br>max risk %{z:.1f}<extra></extra>")
+    fig.update_layout(yaxis=dict(autorange="reversed", showgrid=False), xaxis=dict(showgrid=False))
+    return fig
+
+
+def class_donut(df: pd.DataFrame, title: str, center: str) -> go.Figure:
+    counts = df["classification"].value_counts().reindex(T.CLASS_ORDER, fill_value=0)
+    counts = counts[counts > 0]
+    fig = _fig(title, 300)
+    fig.add_pie(labels=[f"{T.CLASS_ICONS[c]} {c}" for c in counts.index], values=counts.values, hole=0.62,
+                marker=dict(colors=[T.CLASS_COLORS[c] for c in counts.index], line=dict(color=T.PANEL, width=2)),
+                textinfo="none", sort=False, hovertemplate="%{label}: %{value} (%{percent})<extra></extra>")
+    fig.add_annotation(text=center, showarrow=False, font=dict(size=15, color=T.INK))
+    fig.update_layout(height=360, legend=dict(orientation="h", x=0, y=-0.05, yanchor="top", font=dict(size=11)),
+                      margin=dict(l=10, r=10, t=10, b=10))
+    return fig
+
+
+def category_bars(means: pd.Series, statuses: dict, title: str) -> go.Figure:
+    """Mean category score at the as-of time; unavailable categories labelled, not drawn as zero."""
+    fig = _fig(title, 300)
+    labels, vals, colors, texts = [], [], [], []
+    for c in T.CATEGORIES:
+        v = means.get(c)
+        labels.append(T.CATEGORY_LABELS[c])
+        vals.append(0 if v is None or pd.isna(v) else v)
+        colors.append(T.CATEGORY_COLORS[c] if v is not None and not pd.isna(v) else T.BORDER)
+        texts.append("unavailable" if v is None or pd.isna(v) else f"{v:.0f} · {statuses.get(c, '')}")
+    fig.add_bar(y=labels, x=vals, orientation="h", marker=dict(color=colors, line=dict(color=T.PANEL, width=2)),
+                text=texts, textposition="outside", cliponaxis=False, textfont=dict(color=T.INK_2),
+                hovertemplate="%{y}: %{text}<extra></extra>")
+    fig.add_vline(x=40, line=dict(color=T.MUTED, dash="dash", width=1))
+    fig.update_layout(height=360, xaxis=dict(range=[0, 125], title="mean score · dashed = threshold 40",
+                                 gridcolor=T.BORDER), yaxis=dict(autorange="reversed"), showlegend=False)
+    return fig
+
+
+HI_BANDS = [(20, 27, "#1f7a4a", "below caution"), (27, 32, "#a3a31a", "caution"), (32, 39, "#c98500", "extreme caution"),
+            (39, 51, "#d95926", "danger"), (51, 70, "#e11d48", "extreme danger")]
+
+
+def heat_index_gauge(value: float, validity: str, title: str) -> go.Figure:
+    """Measurement gauge for heat index (NOT a probability). NWS bands; beyond 58.3 C is extrapolated."""
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number", value=None if pd.isna(value) else value,
+        number=dict(suffix=" °C", font=dict(color=T.INK, size=30)),
+        gauge=dict(axis=dict(range=[20, 70], tickcolor=T.INK_2, tickfont=dict(color=T.INK_2)),
+                   bar=dict(color="#e8eef8", thickness=0.22), bgcolor=T.PANEL_2, borderwidth=0,
+                   steps=[dict(range=[a, b], color=c) for a, b, c, _ in HI_BANDS],
+                   threshold=dict(line=dict(color="#ffffff", width=2), thickness=0.8, value=58.3))))
+    fig.update_layout(paper_bgcolor=T.PANEL, height=230, margin=dict(l=20, r=20, t=48, b=4),
+                      title=dict(text=title, x=0, font=dict(size=14, color=T.INK)), font=dict(color=T.INK_2))
     return fig

@@ -3,6 +3,14 @@
 `streamlit run app.py` — a **read-only** view over saved pipeline outputs. Launching the dashboard never regenerates
 data, refits models, recomputes risk fusion, or writes files (tested).
 
+## Visual design
+
+Dark operations-console theme (`.streamlit/config.toml` + `src/dashboard/theme.py`): navy sidebar with highlighted
+navigation, icon KPI cards, panel cards, risk heatmap (zones × days), alerts feed, classification donut, category-driver
+bars, and a heat-index **measurement** gauge with NWS danger bands (the forecast page never uses a gauge). Risk
+classes always carry a symbol + label (● ▲ ◆ ■ ✖ ◌), never colour alone. No real-time labels, deltas or impact figures
+are shown because none exist in the simulated data.
+
 ## Architecture
 
 ```

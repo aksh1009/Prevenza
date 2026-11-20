@@ -22,8 +22,7 @@ C.inject_css()
 
 def sidebar() -> tuple[str, Filters]:
     with st.sidebar:
-        st.markdown("## 🛡️ Prevenza")
-        st.caption(T.TAGLINE)
+        C.brand()
         st.caption("Population & Workforce Health Early Warning · synthetic demonstrator")
         if "nav" not in st.session_state and st.query_params.get("page") in SLUGS:   # deep link: ?page=alerts
             st.session_state["nav"] = SLUGS[st.query_params["page"]]

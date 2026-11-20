@@ -33,7 +33,8 @@ def episodes_table(E: pd.DataFrame) -> pd.DataFrame:
 
 def render(f: Filters) -> None:
     C.header("Alert investigation", "Why did the risk-fusion system raise a health-risk alert? Episodes are "
-                                    "consecutive Emerging/High health-risk assessments in one zone (both shifts).")
+                                    "consecutive Emerging/High health-risk assessments in one zone (both shifts).",
+             chips=["Risk fusion (model C) episodes", "Not clinical diagnoses"])
     st.caption("Simulated alerts are not clinical diagnoses. Event-matching outcomes are shown only on the "
                "Model evaluation page.")
     E = load_operational("episodes")
@@ -45,9 +46,10 @@ def render(f: Filters) -> None:
         return
     E = E.sort_values("start_decision").reset_index(drop=True)
     tbl = episodes_table(E)
-    st.dataframe(tbl, hide_index=True, key="ai_tbl",
-                 column_config={"Duration h": st.column_config.NumberColumn(format="%.0f")})
-    C.download(tbl, "prevenza_alert_episodes.csv")
+    with C.panel("eps", "Alert episodes", f"{len(tbl)} episodes in filter"):
+        st.dataframe(tbl, hide_index=True, key="ai_tbl",
+                     column_config={"Duration h": st.column_config.NumberColumn(format="%.0f")})
+        C.download(tbl, "prevenza_alert_episodes.csv")
 
     focus = st.session_state.get("focus_zone")
     options = list(E["episode_id"])
@@ -68,22 +70,30 @@ def render(f: Filters) -> None:
                   "extrapolation; verify it before relying on the environmental evidence.")
 
     k = st.columns(5)
-    C.kpi(k[0], "Alert classification", LEVEL[int(ep["max_level"])], f"{int(ep['n_alerts'])} alerting decisions")
-    C.kpi(k[1], "Max risk score", f"{ep['peak_risk_score']:.1f}", "0-100 evidence-weighted index")
-    C.kpi(k[2], "First detection", C.fmt_ts(ep["start_decision"]), f"zone {ep['zone_id']}")
-    C.kpi(k[3], "Duration", f"{ep['duration_hours']:.0f} h", f"{C.fmt_ts(ep['obs_start'])} → {C.fmt_ts(ep['obs_end'])}")
+    lvl = LEVEL[int(ep["max_level"])]
+    C.kpi(k[0], "Alert classification", f"{T.CLASS_ICONS[lvl]} {lvl}", f"{int(ep['n_alerts'])} alerting decisions",
+          icon_name="alert", color=T.CLASS_COLORS[lvl])
+    C.kpi(k[1], "Max risk score", f"{ep['peak_risk_score']:.1f}", "0-100 evidence-weighted index",
+          icon_name="shield", color="#3b82f6")
+    C.kpi(k[2], "First detection", C.fmt_ts(ep["start_decision"]), f"zone {ep['zone_id']}", icon_name="clock",
+          color="#94a3b8")
+    C.kpi(k[3], "Duration", f"{ep['duration_hours']:.0f} h", f"{C.fmt_ts(ep['obs_start'])} → {C.fmt_ts(ep['obs_end'])}",
+          icon_name="pulse", color="#fb923c")
     C.kpi(k[4], "Evidence at detection", f"{first['evidence_level']} · {first['reliability_score']:.0f}%",
-          f"{int(first['n_categories_available'])}/5 categories available")
+          f"{int(first['n_categories_available'])}/5 categories available", icon_name="database", color="#22c55e")
     st.write("")
     st.markdown(f"**Data at first detection:** {data_flag_text(first)} · **Measurement:** {measurement_flag_text(first)}")
 
     # timeline
     lo, hi = ep["start_decision"] - pd.Timedelta(hours=96), ep["end_decision"] + pd.Timedelta(hours=72)
     W = Z[(Z["decision_time"] >= lo) & (Z["decision_time"] <= hi)]
-    fig = charts.risk_trend(W, "Risk score around the episode (shaded = alert episode)")
-    fig.add_vrect(x0=ep["start_decision"], x1=ep["end_decision"], fillcolor="#d03b3b", opacity=0.10, line_width=0)
-    st.plotly_chart(fig, theme=None, key="ai_tl")
-    st.plotly_chart(charts.category_scores(W, "Category scores around the episode"), theme=None, key="ai_cat")
+    fig = charts.risk_trend(W, "")
+    fig.add_vrect(x0=ep["start_decision"], x1=ep["end_decision"], fillcolor="#f87171", opacity=0.14, line_width=0)
+    c1, c2 = st.columns(2)
+    with c1, C.panel("tl", "Risk score around the episode", "shaded = alert episode"):
+        st.plotly_chart(fig, theme=None, key="ai_tl")
+    with c2, C.panel("cat", "Category scores around the episode", "gaps = unavailable"):
+        st.plotly_chart(charts.category_scores(W, ""), theme=None, key="ai_cat")
 
     # explanation at a chosen decision
     st.subheader("Risk explanation")

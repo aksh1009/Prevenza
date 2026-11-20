@@ -30,7 +30,8 @@ def missingness_table(U: pd.DataFrame) -> pd.DataFrame:
 
 
 def render(f: Filters) -> None:
-    C.header("Data quality & reliability", "How complete, timely and valid is the evidence behind each assessment?")
+    C.header("Data quality & reliability", "How complete, timely and valid is the evidence behind each assessment?",
+             chips=["Missing is not zero", "Missing is not normal"])
     cols = st.columns(len(T.DATA_STATES))
     for c, (name, (color, desc)) in zip(cols, T.DATA_STATES.items()):
         c.markdown(f'<div class="pv-card"><div class="k" style="color:{color}">■ {name}</div>'

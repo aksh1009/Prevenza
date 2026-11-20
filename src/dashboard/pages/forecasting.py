@@ -44,7 +44,8 @@ def comparison_rows(r: pd.Series) -> pd.DataFrame:
 
 def render(f: Filters) -> None:
     C.header("24-hour forecasting", "Will a site-zone enter an emerging or escalating heat-risk state within "
-                                    "the next 24 hours? Saved forecasts only — the model is not refitted here.")
+                                    "the next 24 hours? Saved forecasts only — the model is not refitted here.",
+             chips=["Logistic regression vs persistence", "Uncalibrated rankings"])
     C.caution(T.FORECAST_INTERPRETATION)
     C.limitation("Known limitations: " + " ".join(f"({i + 1}) {t}" for i, t in enumerate(LIMITATIONS)))
 
@@ -69,10 +70,15 @@ def render(f: Filters) -> None:
     r = S[S["decision_time"] == t].iloc[0]
 
     k = st.columns(4)
-    C.kpi(k[0], "Current risk classification", C.class_label(r["current_classification"]), f"evidence {r['evidence_level']}")
-    C.kpi(k[1], "24 h forecast score", fmt_ranking_score(r["forecast_score"]), "uncalibrated ranking — not a probability")
-    C.kpi(k[2], "Forecast flag", flag_text(r["forecast_flag"]), f"fixed threshold {r['threshold']:.3f}")
-    C.kpi(k[3], "Latest forecast", "yes" if r["is_latest"] else "no", f"horizon to {C.fmt_ts(r['horizon_end'])}")
+    C.kpi(k[0], "Current risk classification", C.class_label(r["current_classification"]),
+          f"evidence {r['evidence_level']}", icon_name="shield",
+          color=T.CLASS_COLORS.get(r["current_classification"], "#3b82f6"))
+    C.kpi(k[1], "24 h forecast score", fmt_ranking_score(r["forecast_score"]), "uncalibrated ranking — not a probability",
+          icon_name="forecast", color=T.MODEL_COLORS["logistic regression"])
+    C.kpi(k[2], "Forecast flag", flag_text(r["forecast_flag"]), f"fixed threshold {r['threshold']:.3f}",
+          icon_name="alert", color="#fb923c")
+    C.kpi(k[3], "Latest forecast", "yes" if r["is_latest"] else "no", f"horizon to {C.fmt_ts(r['horizon_end'])}",
+          icon_name="clock", color="#94a3b8")
     k2 = st.columns(4)
     C.kpi(k2[0], "Eligibility", "eligible" if r["eligible"] else "not eligible", r["ineligibility_reason"] or "—")
     C.kpi(k2[1], "Inputs filled in (imputed)", int(r["n_inputs_missing"]), "training medians + missing indicators")
@@ -84,13 +90,12 @@ def render(f: Filters) -> None:
     st.write("")
     if r["heat_index_validity"] == "extrapolated":
         C.caution("Heat index input outside the NWS chart range (extrapolated): treat this forecast with extra caution.")
-    st.markdown("**Forecast vs persistence vs current state** (the persistence baseline is always shown)")
-    st.dataframe(comparison_rows(r), hide_index=True, key="fc_cmp")
-    st.caption(f"Limitations recorded with this forecast: {r['limitations']}")
-
-    st.plotly_chart(charts.forecast_timeline(S, float(r["threshold"]),
-                                             f"Forecast ranking score and persistence flags · {zone} {shift} shift"),
-                    theme=None, key="fc_tl")
+    c1, c2 = st.columns([1.25, 1])
+    with c1, C.panel("cmp", "Forecast vs persistence vs current state", "persistence always shown"):
+        st.dataframe(comparison_rows(r), hide_index=True, key="fc_cmp")
+        st.caption(f"Limitations recorded with this forecast: {r['limitations']}")
+    with c2, C.panel("tl", f"Ranking score and persistence flags · {zone} {shift}", "dashed = fixed threshold"):
+        st.plotly_chart(charts.forecast_timeline(S, float(r["threshold"]), ""), theme=None, key="fc_tl")
 
     st.subheader("Latest forecasts — all zones in filter")
     L = FC[FC["is_latest"]].sort_values(["site_id", "zone_id", "shift"])

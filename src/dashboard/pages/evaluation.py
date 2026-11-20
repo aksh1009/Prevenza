@@ -114,7 +114,8 @@ def _fmt_table(df: pd.DataFrame) -> pd.DataFrame:
 
 def render(f) -> None:
     C.header("Model evaluation", "Evaluation-only page: compares detection and forecasting outputs with the "
-                                 "simulation's ground truth. Global filters do not apply here.")
+                                 "simulation's ground truth. Global filters do not apply here.",
+             chips=["Evaluation only", "Synthetic events"])
     C.limitation(T.EVALUATION_LIMITATION)
     st.caption("Metrics are read from saved evaluation outputs. Thresholds were fixed before evaluation; nothing on "
                "this page can change a model, threshold or score.")
