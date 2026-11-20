@@ -1,0 +1,82 @@
+{
+  "model_version": "c0d8197f479b",
+  "features": [
+    "heat_index_celsius_rz",
+    "temperature_celsius_rz",
+    "heat_exposure_load_rz",
+    "heat_related_visits_rz",
+    "absence_rate_rz",
+    "heat_incident_count_rz",
+    "completeness_window7",
+    "env_staleness_hours",
+    "clin_staleness_hours",
+    "abs_staleness_hours"
+  ],
+  "train_cutoff": "2025-07-17 00:00:00",
+  "train_rows": 566,
+  "train_decision_time_max": "2025-07-16 19:00:00",
+  "imputer_medians": {
+    "heat_index_celsius_rz": 0.6744907594765956,
+    "temperature_celsius_rz": 0.5873690363775332,
+    "heat_exposure_load_rz": 0.0,
+    "heat_related_visits_rz": 0.0,
+    "absence_rate_rz": 0.0,
+    "heat_incident_count_rz": 0.0,
+    "completeness_window7": 0.8,
+    "env_staleness_hours": 1.0,
+    "clin_staleness_hours": 49.0,
+    "abs_staleness_hours": 73.0
+  },
+  "threshold_offset": -0.6047359309428085,
+  "config": {
+    "features": {
+      "signal": [
+        "heat_index_celsius_rz",
+        "temperature_celsius_rz",
+        "heat_exposure_load_rz",
+        "heat_related_visits_rz",
+        "absence_rate_rz",
+        "heat_incident_count_rz"
+      ],
+      "data_quality": [
+        "completeness_window7",
+        "env_staleness_hours",
+        "clin_staleness_hours",
+        "abs_staleness_hours"
+      ]
+    },
+    "eligibility": {
+      "warmup_observations": 14,
+      "min_signal_features": 4,
+      "required_features": [
+        "heat_index_celsius_rz"
+      ]
+    },
+    "split": {
+      "method": "chronological",
+      "train_fraction": 0.5,
+      "embargo_hours": 0
+    },
+    "preprocessing": {
+      "imputer_strategy": "median",
+      "scaler": "robust"
+    },
+    "model": {
+      "n_estimators": 300,
+      "max_samples": "auto",
+      "contamination": 0.05,
+      "max_features": 1.0,
+      "bootstrap": false,
+      "random_state": 42
+    },
+    "output": {
+      "scores_file": "isolation_forest_scores.parquet",
+      "model_dir": "models/isolation_forest"
+    }
+  },
+  "versions": {
+    "sklearn": "1.9.1",
+    "numpy": "2.4.6",
+    "pandas": "2.3.3"
+  }
+}

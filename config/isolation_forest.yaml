@@ -1,0 +1,46 @@
+# PREVENZA — Phase 3B.2 Isolation Forest (unsupervised anomaly detection).
+# Ground-truth labels are NEVER used: not as features, not for the split, not for tuning these values.
+# Anomaly scores are relative isolation scores. They are NOT probabilities and NOT clinical risk.
+
+features:
+  signal:                       # robust z-scores vs each series' own as-of baseline (Phase 3A)
+    - heat_index_celsius_rz
+    - temperature_celsius_rz
+    - heat_exposure_load_rz
+    - heat_related_visits_rz
+    - absence_rate_rz
+    - heat_incident_count_rz
+  data_quality:                 # availability / reporting staleness at decision time
+    - completeness_window7
+    - env_staleness_hours
+    - clin_staleness_hours
+    - abs_staleness_hours
+
+eligibility:
+  # First N observations of each site-zone-shift series have no baseline (Phase 3A: gap 7 + min_count 7).
+  warmup_observations: 14
+  min_signal_features: 4        # of the signal features above, known (non-NA) for the row
+  required_features: [heat_index_celsius_rz]
+
+split:
+  method: chronological         # random/shuffled splits are rejected by the code
+  # Training = rows whose decision_time <= cutoff. The cutoff is the decision date at this quantile of
+  # distinct decision dates (data-driven, not chosen from event dates).
+  train_fraction: 0.5
+  embargo_hours: 0              # optional gap after the cutoff excluded from both train and eval
+
+preprocessing:
+  imputer_strategy: median      # fitted on training rows only
+  scaler: robust                # median/IQR, fitted on training rows only
+
+model:
+  n_estimators: 300
+  max_samples: auto
+  contamination: 0.05           # expected anomaly share in TRAINING data; sets the decision threshold
+  max_features: 1.0
+  bootstrap: false
+  random_state: 42
+
+output:
+  scores_file: isolation_forest_scores.parquet       # in data/processed/
+  model_dir: models/isolation_forest

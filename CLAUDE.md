@@ -53,7 +53,11 @@ data_generation -> raw CSV -> preprocessing -> processed Parquet (full key grid 
 - Build unified table + as-of features: `python -m src.features.build` (settings in `config/features.yaml`).
   Features for an observation use a source value only if `reporting_timestamp <= decision_time`
   (shift end + `decision_lag_hours`). `unified_observations.parquet` is retrospective - never a model input.
-- Generated docs (`docs/simulation_summary.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,
+- Isolation Forest: `python -m src.detection.isolation_forest [--use-saved]` (settings in
+  `config/isolation_forest.yaml`; model persisted in `models/isolation_forest/`). Chronological split only;
+  preprocessing fitted on training rows only; warm-up/insufficient rows get NA, never a forced score.
+  `anomaly_score` is a relative isolation score - never call it a probability or clinical risk.
+- Generated docs (`docs/simulation_summary.md`, `docs/isolation_forest_report.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,
   `docs/feature_dictionary.md`) must not be edited by hand.
 - Environment: `.venv` (Python 3.11). Activate with `.venv\Scriptsctivate` (Windows).
 
