@@ -1,6 +1,6 @@
 # HealthSentinel Architecture
 
-Status: **Phase 4C (pre-dashboard audit complete).** Components marked *planned* are not implemented yet.
+Status: **Phase 5 (dashboard).** Components marked *planned* are not implemented yet.
 
 ## 1. Purpose and scope
 An explainable, privacy-preserving early warning for **occupational heat-related health risk**. It combines
@@ -117,4 +117,4 @@ No metric is reported unless `src/evaluation/` computed it on the current data.
 5. Back-test and evaluation report. **(4A done - `python -m src.evaluation.backtest`; full chronological replay, episode/event matching, A/B/C comparison; see docs/backtesting_report.md and docs/model_comparison.md)**
 5b. 24 h forecasting. **(4B done - `python -m src.forecasting.forecast`; chronological purged splits, persistence baselines vs class-weighted logistic regression; uncalibrated scores; see docs/forecast_report.md)**
 5c. Pre-dashboard audit. **(4C done - `python -m src.evaluation.audit`; see docs/pre_dashboard_audit.md. Heat-index validity indicator added (src/features/quality.py); deferred: dew-point cap in simulator + multi-seed evaluation)**
-6. Streamlit app with role-based, suppressed views.
+6. Streamlit app. **(Phase 5 done - `streamlit run app.py`; read-only, operational/evaluation separation; see docs/dashboard.md)**

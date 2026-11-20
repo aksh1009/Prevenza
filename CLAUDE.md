@@ -67,6 +67,9 @@ data_generation -> raw CSV -> preprocessing -> processed Parquet (full key grid 
   never clip it, never relabel it WBGT, and always surface the flag wherever the value is shown.
 - Audit: `python -m src.evaluation.audit` (read-only; never refits models). EVT-005 spans validation and test -
   report unseen-event results separately from all-test results.
+- Dashboard: `streamlit run app.py` (src/dashboard/). Read-only; operational pages must use
+  `load_operational()` (no labels/event ids); evaluation data only on the Model evaluation page. Forecast scores shown
+  as decimals with the fixed uncalibrated-ranking statement; persistence baseline always visible.
 - Backtest metrics are SYNTHETIC validation only. Never tune thresholds on ground-truth events; never quote a
   metric not present in docs/backtesting_report.md.
 - Generated docs (`docs/simulation_summary.md`, `docs/isolation_forest_report.md`, `docs/risk_fusion_report.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,
