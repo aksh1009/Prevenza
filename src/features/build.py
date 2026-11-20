@@ -70,6 +70,25 @@ def _slope(V, mask, min_points):
     return np.where((cnt >= min_points) & (sxx > 0), sxy / np.where(sxx > 0, sxx, 1), np.nan)
 
 
+def _cusum(V, med, scale, mask, c):
+    """Upper CUSUM per row over known values in the window (oldest -> newest), vs that row's baseline."""
+    n = V.shape[0]
+    out = np.full(n, np.nan)
+    Z = np.minimum((V - med[:, None]) / scale[:, None], c["z_cap"])
+    for t in range(n):
+        if np.isnan(med[t]):
+            continue
+        z = Z[t, mask[t]]
+        z = z[~np.isnan(z)]
+        if len(z) == 0:
+            continue
+        s = 0.0
+        for v in z:                                    # columns ascending = chronological
+            s = max(0.0, s + v - c["k"])
+        out[t] = s
+    return out
+
+
 def series_features(g: pd.DataFrame, cfg: dict) -> dict[str, np.ndarray]:
     """Features for one site-zone-shift series (rows sorted by observation_date)."""
     n = len(g)
@@ -138,6 +157,7 @@ def series_features(g: pd.DataFrame, cfg: dict) -> dict[str, np.ndarray]:
             "hist_median": med, "hist_mad": mad, "dev": last - med, "rz": (last - med) / scale,
             f"roll{s_cfg['length']}_rz": (r_s - med) / scale,
             f"slope{tr['length']}": _slope(V, w_trend, tr["min_points"]),
+            "cusum": _cusum(V, med, scale, past & (D < cfg["cusum"]["window"]), cfg["cusum"]),
         }
         for stat, _ in stat_specs(cfg):
             out[f"{name}_{stat}"] = vals[stat]

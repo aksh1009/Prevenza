@@ -6,7 +6,7 @@
 ## Model
 
 - Pipeline: `SimpleImputer(median)` -> `RobustScaler` -> `IsolationForest(n_estimators=300, max_samples=auto, contamination=0.05, max_features=1.0, random_state=42)`; all steps fitted on training rows only.
-- Model version (config + training-data fingerprint): `c0d8197f479b`; sklearn 1.9.1.
+- Model version (config + training-data fingerprint): `5b68d340b0a8`; sklearn 1.9.1.
 - Features (10): `heat_index_celsius_rz`, `temperature_celsius_rz`, `heat_exposure_load_rz`, `heat_related_visits_rz`, `absence_rate_rz`, `heat_incident_count_rz`, `completeness_window7`, `env_staleness_hours`, `clin_staleness_hours`, `abs_staleness_hours`.
 - Isolation Forest is insensitive to monotone per-feature rescaling; the scaler is kept for a consistent, inspectable preprocessing step.
 - Because data-quality features (completeness, staleness) are inputs, a flag can reflect unusual data availability as well as unusual heat/health signals. Attribution is a later phase.
@@ -38,10 +38,10 @@ Training flagged share is set by `contamination`; evaluation share reflects how 
 
 | statistic | train | eval |
 |---|---|---|
-| max anomaly_score | 0.098 | -0.044 |
+| max anomaly_score | 0.101 | -0.041 |
 | p99 heat_index_celsius_rz | 10.797 | 4.357 |
 | p99 temperature_celsius_rz | 6.822 | 2.698 |
-| p99 heat_exposure_load_rz | 105.137 | 28.404 |
+| p99 heat_exposure_load_rz | 12.766 | 4.910 |
 | p99 heat_related_visits_rz | 8.000 | 4.000 |
 | p99 absence_rate_rz | 20.777 | 16.670 |
 | p99 heat_incident_count_rz | 4.000 | 4.000 |

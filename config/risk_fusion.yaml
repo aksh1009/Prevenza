@@ -1,0 +1,110 @@
+# PREVENZA — Phase 3B.3 multi-signal risk fusion.
+# All thresholds are a-priori analyst settings. They were NOT tuned against ground-truth labels.
+# Risk scores are 0-100 evidence-weighted indices of heat-health signal strength, NOT probabilities
+# and NOT individual clinical risk. Severity (how strong) and evidence (how complete) are reported separately.
+
+# Category weights (renormalised over AVAILABLE categories; missing/stale categories are excluded, never 0).
+weights:
+  environmental: 0.25
+  workforce_exposure: 0.15
+  clinical: 0.25
+  absenteeism: 0.15
+  incidents: 0.20
+
+# Score components per category. Each component maps a feature to 0-100 by linear ramp between `low` (0) and
+# `high` (100), clipped. Category score = weighted mean of AVAILABLE components. `primary` must be available
+# for the category to count (it carries the baseline; NA => no_baseline / missing).
+categories:
+  environmental:
+    source: env
+    primary: heat_index_celsius_rz
+    observed: heat_index_celsius_last
+    baseline: heat_index_celsius_hist_median
+    cusum: heat_index_celsius_cusum
+    unit: degC heat index
+    components:
+      - {feature: heat_index_celsius_last, low: 32.0, high: 51.0, weight: 0.4, role: absolute}   # NWS extreme caution -> extreme danger
+      - {feature: heat_index_celsius_rz,   low: 1.0,  high: 4.0,  weight: 0.3, role: deviation}
+      - {feature: heat_index_celsius_cusum, low: 2.0, high: 8.0,  weight: 0.3, role: cusum}
+  workforce_exposure:
+    source: wf
+    primary: heat_exposure_load_rz
+    observed: heat_exposure_load_last
+    baseline: heat_exposure_load_hist_median
+    cusum: heat_exposure_load_cusum
+    unit: degC x hours above threshold
+    components:
+      - {feature: heat_exposure_load_last,  low: 30.0, high: 200.0, weight: 0.3, role: absolute}
+      - {feature: heat_exposure_load_rz,    low: 1.0,  high: 4.0,   weight: 0.3, role: deviation}
+      - {feature: average_exposure_hours_rz, low: 1.0, high: 4.0,   weight: 0.1, role: deviation}
+      - {feature: heat_exposure_load_cusum, low: 2.0,  high: 8.0,   weight: 0.3, role: cusum}
+  clinical:
+    source: clin
+    primary: heat_related_visits_rz
+    observed: heat_related_visits_last
+    baseline: heat_related_visits_hist_median
+    cusum: heat_related_visits_cusum
+    unit: heat-related visits per shift
+    components:
+      - {feature: heat_related_visits_rz,    low: 2.0, high: 8.0,  weight: 0.35, role: deviation}
+      - {feature: heat_visits_mod_severe_rz, low: 2.0, high: 8.0,  weight: 0.15, role: deviation}
+      - {feature: heat_visits_per_100_last,  low: 2.0, high: 15.0, weight: 0.2,  role: absolute}
+      - {feature: heat_related_visits_cusum, low: 2.0, high: 8.0,  weight: 0.3,  role: cusum}
+  absenteeism:
+    source: abs
+    primary: absence_rate_rz
+    observed: absence_rate_last
+    baseline: absence_rate_hist_median
+    cusum: absence_rate_cusum
+    unit: absence rate (fraction)
+    components:
+      - {feature: absence_rate_rz,    low: 2.0, high: 8.0, weight: 0.5, role: deviation}
+      - {feature: absence_rate_cusum, low: 2.0, high: 8.0, weight: 0.5, role: cusum}
+  incidents:
+    source: inc
+    primary: heat_incident_count_rz
+    observed: heat_incident_count_last
+    baseline: heat_incident_count_hist_median
+    cusum: heat_incident_count_cusum
+    unit: heat-related incidents per shift
+    components:
+      - {feature: heat_incident_count_rz,   low: 2.0, high: 8.0, weight: 0.4, role: deviation}
+      - {feature: incidents_mod_severe_rz,  low: 2.0, high: 8.0, weight: 0.3, role: deviation}
+      - {feature: heat_incident_count_cusum, low: 2.0, high: 8.0, weight: 0.3, role: cusum}
+
+# A category is STALE (excluded, listed) when its source's last known observation is older than this.
+max_staleness_hours:
+  env: 6
+  wf: 30
+  clin: 72
+  abs: 96
+  inc: 72
+
+# Isolation Forest: blended into the fused score ONLY for out-of-sample rows (split == eval). In-sample rows
+# (training period) are reported but not used, because that model was fitted on later data.
+isolation_forest:
+  weight: 0.10
+  score_low: -0.10        # anomaly_score mapped linearly to 0-100 between these
+  score_high: 0.10
+
+classification:
+  elevated_threshold: 40      # category score at/above which a category counts as elevated
+  persistence:                # elevated in >= min_elevated of the last `window` observations of the series
+    window: 3                 # (incl. current; earlier rows use their own as-of scores; unknown rows don't count)
+    min_elevated: 2
+  health_categories: [clinical, absenteeism, incidents]
+  exposure_categories: [environmental, workforce_exposure]
+
+evidence:
+  min_available_weight: 0.40  # below this, evidence is insufficient (cannot confirm Normal)
+  adequate_available_weight: 0.70
+
+severity_bands:               # by fused risk_score; independent of evidence
+  - {name: low, max: 25}
+  - {name: moderate, max: 50}
+  - {name: high, max: 75}
+  - {name: very_high, max: 100}
+
+output:
+  assessments_file: risk_assessments.parquet
+  explanations_file: risk_explanations.parquet

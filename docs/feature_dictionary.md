@@ -5,7 +5,7 @@
 ## Files
 
 - `data/processed/unified_observations.parquet` - five sources joined one-to-one on `observation_date + site_id + zone_id + shift`; every value as eventually reported (NA preserved), with per-source `*_recorded_at`, `*_reporting_timestamp`, `*_reporting_status`, `*_reporting_delay_hours`. Prefixes: `env_`, `wf_`, `clin_`, `abs_`, `inc_`. **Retrospective record - not a model input.**
-- `data/processed/features.parquet` - one row per observation; identifier columns `observation_date, site_id, zone_id, shift, decision_time` + 228 as-of features.
+- `data/processed/features.parquet` - one row per observation; identifier columns `observation_date, site_id, zone_id, shift, decision_time` + 244 as-of features.
 
 ## Leakage rules
 
@@ -33,8 +33,9 @@ Windows: short = 3 obs (min 1), long = 7 obs (min 3); baseline = 28 obs ending 7
 | `_rz` | Robust z: (last - hist_median) / max(1.4826 x MAD, scale_floor). |
 | `_roll3_rz` | Robust z of the 3-observation mean vs the baseline. |
 | `_slope7` | OLS slope per observation over known values in the last 7 observations (>= 3 points, else NA). |
+| `_cusum` | One-sided upper CUSUM over known values of the last 7 observations, z vs current baseline capped at 3.0, k = 0.5: S = max(0, S + min(z, cap) - k). NA without baseline or known values. |
 
-Robust-scale floors (`scale_floor`): `temperature_celsius` 0.5, `relative_humidity` 2.0, `heat_index_celsius` 0.5, `heat_index_excess` 0.5, `workers_present` 1.0, `average_exposure_hours` 0.25, `total_exposure_hours` 5.0, `heat_exposure_load` 1.0, `heat_related_visits` 0.5, `heat_visits_mod_severe` 0.5, `heat_visits_per_100` 1.0, `absence_rate` 0.01, `absent_workers` 0.5, `heat_incident_count` 0.5, `incidents_mod_severe` 0.5, `incidents_per_100` 0.5.
+Robust-scale floors (`scale_floor`): `temperature_celsius` 0.5, `relative_humidity` 2.0, `heat_index_celsius` 0.5, `heat_index_excess` 1.0, `workers_present` 1.0, `average_exposure_hours` 0.25, `total_exposure_hours` 5.0, `heat_exposure_load` 10.0, `heat_related_visits` 0.5, `heat_visits_mod_severe` 0.5, `heat_visits_per_100` 1.0, `absence_rate` 0.01, `absent_workers` 0.5, `heat_incident_count` 0.5, `incidents_mod_severe` 0.5, `incidents_per_100` 0.5.
 
 ## Signals
 
@@ -57,7 +58,7 @@ Robust-scale floors (`scale_floor`): `temperature_celsius` 0.5, `relative_humidi
 | `incidents_mod_severe` | incident_data | count | Moderate + severe heat-related incidents. |
 | `incidents_per_100` | incident_data + workforce_data | per 100 present workers | 100 x heat_incident_count / workers present (needs both sources). |
 
-Signal features: 16 signals x 12 statistics = 192 columns, named `<signal>_<suffix>`.
+Signal features: 16 signals x 13 statistics = 208 columns, named `<signal>_<suffix>`.
 
 ## Availability, missingness and context features
 
@@ -104,8 +105,8 @@ Signal features: 16 signals x 12 statistics = 192 columns, named `<signal>_<suff
 
 | Group | Columns |
 |---|---|
-| signal | 192 |
+| signal | 208 |
 | availability | 23 |
 | missingness | 8 |
 | context | 5 |
-| **total** | **228** |
+| **total** | **244** |

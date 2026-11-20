@@ -106,6 +106,9 @@ def stat_specs(cfg: dict) -> list[tuple[str, str]]:
         (f"roll{s['length']}_rz", f"Robust z of the {s['length']}-observation mean vs the baseline."),
         (f"slope{t['length']}", f"OLS slope per observation over known values in the last {t['length']} "
                                 f"observations (>= {t['min_points']} points, else NA)."),
+        ("cusum", f"One-sided upper CUSUM over known values of the last {cfg['cusum']['window']} observations, "
+                  f"z vs current baseline capped at {cfg['cusum']['z_cap']}, k = {cfg['cusum']['k']}: "
+                  "S = max(0, S + min(z, cap) - k). NA without baseline or known values."),
     ]
 
 
@@ -164,6 +167,8 @@ def feature_registry(cfg: dict | None = None) -> list[dict]:
 def _stat_unit(stat: str, unit: str) -> str:
     if stat.endswith("rz"):
         return "robust z"
+    if stat == "cusum":
+        return "cumulative robust z"
     if stat.startswith("slope"):
         return f"{unit} per observation"
     return unit

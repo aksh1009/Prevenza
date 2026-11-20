@@ -182,6 +182,15 @@ def _reference(u, zone, shift, value_fn, prefixes, floor):
         xs = np.array([p[0] for p in pts], float)
         r[f"slope{tr['length']}"] = (np.polyfit(xs, [p[1] for p in pts], 1)[0]
                                      if len(pts) >= tr["min_points"] and np.ptp(xs) > 0 else np.nan)
+        cu = CFG["cusum"]
+        cw = [known[s] for s in range(max(t - cu["window"] + 1, 0), t + 1) if s in known]
+        if np.isnan(med) or not cw:
+            r["cusum"] = np.nan
+        else:
+            acc = 0.0
+            for v in cw:
+                acc = max(0.0, acc + min((v - med) / scale, cu["z_cap"]) - cu["k"])
+            r["cusum"] = acc
         rows.append(r)
     return pd.DataFrame(rows)
 

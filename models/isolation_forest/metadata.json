@@ -1,5 +1,5 @@
 {
-  "model_version": "c0d8197f479b",
+  "model_version": "5b68d340b0a8",
   "features": [
     "heat_index_celsius_rz",
     "temperature_celsius_rz",
@@ -27,7 +27,7 @@
     "clin_staleness_hours": 49.0,
     "abs_staleness_hours": 73.0
   },
-  "threshold_offset": -0.6047359309428085,
+  "threshold_offset": -0.6042587707072593,
   "config": {
     "features": {
       "signal": [

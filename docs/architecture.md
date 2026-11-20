@@ -1,6 +1,6 @@
 # HealthSentinel Architecture
 
-Status: **Phase 3B.2 (Isolation Forest anomaly detection).** Components marked *planned* are not implemented yet.
+Status: **Phase 3B.3 (multi-signal risk fusion).** Components marked *planned* are not implemented yet.
 
 ## 1. Purpose and scope
 An explainable, privacy-preserving early warning for **occupational heat-related health risk**. It combines
@@ -113,6 +113,6 @@ No metric is reported unless `src/evaluation/` computed it on the current data.
 1. Skeleton, contracts, data dictionary, structural tests. **(done)**
 2. Synthetic generator for the 5 feeds + ground truth + data-quality log. **(done - `python -m src.data_generation.generate`)**
 3. Preprocessing (grid, availability, as-of) and features. **(3A done - `python -m src.features.build`; decision time = shift end + 1 h; see docs/feature_dictionary.md)**
-4. Detection + explainability + recommendations. **(3B.2 Isolation Forest done - `python -m src.detection.isolation_forest`; chronological split, train-only preprocessing, eligibility gating; see docs/isolation_forest_report.md. Statistical baseline detector (3B.1) and risk fusion not yet implemented.)**
+4. Detection + explainability + recommendations. **(3B.2 Isolation Forest done - `python -m src.detection.isolation_forest`; chronological split, train-only preprocessing, eligibility gating; see docs/isolation_forest_report.md. 3B.3 risk fusion done - `python -m src.detection.risk_fusion` (config/risk_fusion.yaml): robust-z + CUSUM + absolute levels -> five 0-100 category scores, available-weight renormalisation, staleness exclusion, persistence + independent-category rules, separate severity and evidence; see docs/risk_fusion_report.md. The robust z-scores/CUSUM in features.parquet serve as the statistical detector (no separate 3B.1 module).)**
 5. Back-test and evaluation report.
 6. Streamlit app with role-based, suppressed views.

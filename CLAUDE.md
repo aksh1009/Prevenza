@@ -57,7 +57,11 @@ data_generation -> raw CSV -> preprocessing -> processed Parquet (full key grid 
   `config/isolation_forest.yaml`; model persisted in `models/isolation_forest/`). Chronological split only;
   preprocessing fitted on training rows only; warm-up/insufficient rows get NA, never a forced score.
   `anomaly_score` is a relative isolation score - never call it a probability or clinical risk.
-- Generated docs (`docs/simulation_summary.md`, `docs/isolation_forest_report.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,
+- Risk fusion: `python -m src.detection.risk_fusion` (config `config/risk_fusion.yaml`). Missing/stale/no-baseline
+  categories are excluded and listed, never scored 0; environmental evidence alone never yields a health class;
+  Isolation Forest contributes only on out-of-sample (eval) rows. Pipeline order: generate -> features.build ->
+  isolation_forest -> risk_fusion.
+- Generated docs (`docs/simulation_summary.md`, `docs/isolation_forest_report.md`, `docs/risk_fusion_report.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,
   `docs/feature_dictionary.md`) must not be edited by hand.
 - Environment: `.venv` (Python 3.11). Activate with `.venv\Scriptsctivate` (Windows).
 

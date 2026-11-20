@@ -23,6 +23,14 @@ baseline:
   min_count: 7
   mad_scale: 1.4826           # MAD -> sd-equivalent for normal data
 
+# One-sided upper CUSUM at decision time over the last `window` observations' KNOWN values, each standardised
+# against the CURRENT as-of baseline: S = max(0, S + min(z, z_cap) - k). Unknown observations are skipped
+# (never treated as 0). Capping z keeps an isolated spike from producing a sustained CUSUM.
+cusum:
+  window: 7
+  k: 0.5
+  z_cap: 3.0
+
 trend:
   length: 7
   min_points: 3
@@ -32,11 +40,11 @@ scale_floor:
   temperature_celsius: 0.5
   relative_humidity: 2.0
   heat_index_celsius: 0.5
-  heat_index_excess: 0.5
+  heat_index_excess: 1.0          # zero-inflated: 1 degC above threshold
   workers_present: 1.0
   average_exposure_hours: 0.25
   total_exposure_hours: 5.0
-  heat_exposure_load: 1.0
+  heat_exposure_load: 10.0        # zero-inflated: 1 degC above threshold for a ~10 h shift
   heat_related_visits: 0.5
   heat_visits_mod_severe: 0.5
   heat_visits_per_100: 1.0
