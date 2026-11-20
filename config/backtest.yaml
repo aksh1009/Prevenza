@@ -1,0 +1,47 @@
+# PREVENZA — Phase 4A historical backtesting.
+# Every value here was fixed BEFORE looking at evaluation results and is not tuned on ground-truth events.
+# All results are on SYNTHETIC data: they show the pipeline behaves as designed under simulated conditions,
+# not real-world clinical or operational validity.
+
+replay:
+  # Rebuild features -> isolation forest (persisted model) -> fusion at every decision timestamp using only
+  # rows with reporting_timestamp <= that timestamp. `sample` limits the number of decision times (null = all).
+  sample: null
+
+models:
+  model_a:                       # Model A: univariate MAD robust-z + CUSUM (no fusion)
+    name: "A: MAD + CUSUM"
+    signals: [heat_index_celsius, temperature_celsius, heat_exposure_load,
+              heat_related_visits, absence_rate, heat_incident_count]
+    z_threshold: 5.0             # alert if any signal robust z >= this
+    cusum_threshold: 5.0         # ... or any signal CUSUM >= this
+  model_b:
+    name: "B: Isolation Forest"  # anomaly_decision, out-of-sample (eval split) rows only
+  model_c:
+    name: "C: Risk fusion"       # health alert = Emerging or High health risk
+    health_classes: ["Emerging health risk", "High health risk"]
+    high_classes: ["High health risk"]
+    warning_classes: ["Environmental warning", "Elevated occupational exposure"]
+
+episodes:
+  max_gap_hours: 24              # consecutive alert decisions <= 24 h apart (per zone) form one episode
+
+matching:
+  pre_onset_tolerance_hours: 0   # alerts on observations before onset never match
+  post_end_tolerance_hours: 24   # observations up to 24 h after event end still match (late reports)
+  positive_labels: [1, 2]        # observation-level positives (emerging + escalating)
+
+windows:
+  # full: all observations after the per-series warm-up (models A and C; no fitted parameters).
+  # comparison: decision_time >= Isolation Forest training cutoff (A, B and C on identical rows).
+  warmup_observations: 14
+
+data_states:                     # evaluated separately (defined from data availability, never from labels)
+  multiple_missing_max_categories: 3
+
+output:
+  backtest_results: backtest_results.parquet
+  event_results: event_detection_results.parquet
+  episodes: alert_episodes.parquet
+  metrics: backtest_metrics.parquet
+  figures_dir: docs/figures
