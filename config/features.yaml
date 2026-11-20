@@ -1,0 +1,47 @@
+# PREVENZA — feature engineering settings (Phase 3A).
+# These are analyst choices, independent of the simulator's internal parameters.
+
+# Features for an observation are computed AS OF its decision time:
+#   decision_time = shift end (recorded_at) + decision_lag_hours
+# A source value (from any observation) is usable only if reporting_timestamp <= decision_time.
+decision_lag_hours: 1.0
+
+# Domain threshold for heat-index excess: ~US NWS "extreme caution" (90 F).
+heat_index_threshold_c: 32.0
+
+# Rolling windows, in observations of the same site-zone-shift series (1 observation = 1 day of that shift).
+windows:
+  short: {length: 3, min_periods: 1}
+  long:  {length: 7, min_periods: 3}
+
+# Historical baseline: the `length` observations that precede the most recent `gap` observations.
+# With length 28 / gap 7 the baseline for t covers t-34 .. t-7, so an emerging event inside the
+# recent week does not contaminate its own baseline.
+baseline:
+  length: 28
+  gap: 7
+  min_count: 7
+  mad_scale: 1.4826           # MAD -> sd-equivalent for normal data
+
+trend:
+  length: 7
+  min_points: 3
+
+# Floor for the robust scale (1.4826 x MAD) per signal so sparse counts (MAD = 0) don't blow up z-scores.
+scale_floor:
+  temperature_celsius: 0.5
+  relative_humidity: 2.0
+  heat_index_celsius: 0.5
+  heat_index_excess: 0.5
+  workers_present: 1.0
+  average_exposure_hours: 0.25
+  total_exposure_hours: 5.0
+  heat_exposure_load: 1.0
+  heat_related_visits: 0.5
+  heat_visits_mod_severe: 0.5
+  heat_visits_per_100: 1.0
+  absence_rate: 0.01
+  absent_workers: 0.5
+  heat_incident_count: 0.5
+  incidents_mod_severe: 0.5
+  incidents_per_100: 0.5

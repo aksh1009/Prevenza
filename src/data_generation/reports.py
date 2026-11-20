@@ -1,0 +1,267 @@
+"""Generate docs/simulation_summary.md and docs/data_quality_report.md from the generated data.
+
+Every number in these reports is computed from the generated datasets. They are DESCRIPTIVE statistics of
+synthetic data, not model performance metrics.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from src import config, schemas
+
+KEY = list(schemas.OBSERVATION_KEY)
+GEN_CMD = "python -m src.data_generation.generate"
+
+
+def _md_table(df: pd.DataFrame) -> str:
+    df = df.copy()
+    cols = [str(c) for c in df.columns]
+    lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    for row in df.itertuples(index=False):
+        cells = []
+        for v in row:
+            if v is None or (not isinstance(v, str) and pd.isna(v)):
+                cells.append("NA")
+            elif isinstance(v, float):
+                cells.append(f"{v:.2f}")
+            elif isinstance(v, pd.Timestamp):
+                cells.append(v.strftime("%Y-%m-%d %H:%M") if (v.hour or v.minute) else v.strftime("%Y-%m-%d"))
+            else:
+                cells.append(str(v))
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines)
+
+
+def _wide(data) -> pd.DataFrame:
+    m = data["observation_labels"][KEY + ["label"]]
+    pick = {"environmental_data": ["heat_index_celsius"],
+            "workforce_data": ["average_exposure_hours"],
+            "clinical_data": ["heat_related_visits"],
+            "absenteeism_data": ["absence_rate"],
+            "incident_data": ["heat_incident_count"]}
+    for name, cols in pick.items():
+        m = m.merge(data[name][KEY + cols], on=KEY, how="left")
+    return m
+
+
+def _phase_table(data, sim) -> pd.DataFrame:
+    """Mean observed signal per event phase (day + night shifts) vs a pre-event reference window."""
+    w = _wide(data)
+    sig = ["heat_index_celsius", "average_exposure_hours", "heat_related_visits", "absence_rate",
+           "heat_incident_count"]
+    for c in sig:
+        w[c] = pd.to_numeric(w[c], errors="coerce").astype(float)
+    rows = []
+    ev = data["heat_risk_events"]
+    for eid, g in ev.groupby("event_id", sort=True):
+        zones = list(g["zone_id"])
+        on, esc, end = g["onset_timestamp"].iloc[0], g["escalation_timestamp"].iloc[0], g["end_timestamp"].iloc[0]
+        etype = g["event_type"].iloc[0]
+        zmask = w["zone_id"].isin(zones)
+        d = w["observation_date"]
+        phases = {"reference (14 d before onset)": zmask & (d >= on.normalize() - pd.Timedelta(days=14))
+                  & (d < on.normalize())}
+        if pd.notna(esc):
+            phases["emerging (label 1)"] = zmask & (w["label"] == 1)
+            phases["escalating (label 2)"] = zmask & (w["label"] == 2)
+        else:
+            phases["spike date"] = zmask & (d >= on.normalize()) & (d < end)
+            phases["3 days after spike"] = zmask & (d >= end.normalize() + pd.Timedelta(days=1)) & \
+                (d <= end.normalize() + pd.Timedelta(days=3))
+        for ph, m in phases.items():
+            r = {"event": eid, "type": etype, "phase": ph, "zone-shifts": int(m.sum())}
+            r.update({c: w.loc[m, c].mean() for c in sig})
+            rows.append(r)
+    return pd.DataFrame(rows)
+
+
+def simulation_summary(data, sim, seed) -> str:
+    ev = data["heat_risk_events"]
+    lab = data["observation_labels"]
+    dates = data["environmental_data"]["observation_date"]
+    zones = pd.DataFrame([{"site_id": s, "site": sim["sites"][s]["name"], "zone_id": z, "zone": a["name"],
+                           "environment": a["environment"], "radiant_heat": a["radiant_heat"],
+                           "work_intensity": a["work_intensity"],
+                           "headcount day/night": f"{a['headcount']['day']}/{a['headcount']['night']}"}
+                          for s, z, a in config.iter_zones(sim)])
+    scen = pd.DataFrame([{"event_id": s["id"], "type": s["type"], "zones": ", ".join(s["zones"]),
+                          "onset_date": s["onset_date"], "escalation_date": s.get("escalation_date", "NA"),
+                          "end_date": s["end_date"], "shifts": ", ".join(s.get("shifts", sim["shifts"])),
+                          "temp +C": s["temp_delta_c"], "RH +%": s["rh_delta_pct"],
+                          "exposure +h": s.get("exposure_delta_hours", 0.0), "severity": s["severity"],
+                          "clinical gap": (f"{s['clinical_gap']['start_date']}..{s['clinical_gap']['end_date']}"
+                                           if s.get("clinical_gap") else "")}
+                         for s in sim["scenarios"]])
+    lab_counts = lab.groupby(["label", "label_name"]).size().reset_index(name="observations")
+    hm = sim["health_model"]
+    rows = {n: len(data[n]) for n in schemas.ALL_CONTRACTS}
+
+    return "\n".join([
+        "# PREVENZA Simulation Summary",
+        "",
+        f"> GENERATED by `{GEN_CMD}` (seed **{seed}**). Do not edit by hand. All data is **synthetic and "
+        "aggregated**; figures below are descriptive statistics of the simulation, **not** model performance.",
+        "",
+        "## Design",
+        "",
+        f"- Period: {dates.min():%Y-%m-%d} to {dates.max():%Y-%m-%d} ({dates.nunique()} days)",
+        f"- {len(sim['sites'])} sites x {zones.groupby('site_id').size().iloc[0]} zones x {len(sim['shifts'])} "
+        f"shifts = **{config.expected_observation_count(sim)} observations** per source dataset",
+        "- Shifts: day 06:00-18:00, night 18:00-06:00 (night belongs to its start date)",
+        f"- Reproduce: `{GEN_CMD} --seed {seed}`",
+        "",
+        "### Sites and zones",
+        "",
+        _md_table(zones),
+        "",
+        "## Row counts",
+        "",
+        _md_table(pd.DataFrame({"dataset": list(rows), "rows": list(rows.values())})),
+        "",
+        "## Scenarios (config/simulation.yaml -> scenarios)",
+        "",
+        "- **A Normal operations** - everywhere outside the windows below: seasonal + AR(1) weather, noise, "
+        "occasional isolated incidents and visits at base rates.",
+        "- **B Gradual heatwave escalation** (`gradual_heatwave_escalation`) - temperature/humidity ramp from "
+        "onset to escalation, longer exposure hours; clinic visits respond with a short lag, absence with a "
+        "longer lag, incidents rise; forcing tapers over the last 2 days.",
+        "- **C Isolated temperature spike** (`isolated_temperature_spike`) - single shift, no sustained "
+        "deterioration. **Negative control**: labelled 0.",
+        "- **D Missing clinical reporting** (`heat_escalation_clinical_gap`) - escalation as in B while the clinic "
+        "feed is `not_reported`; environment, workforce, absence and incident feeds continue.",
+        "",
+        _md_table(scen),
+        "",
+        "## Ground truth",
+        "",
+        "`data/ground_truth/heat_risk_events.csv` (one row per event x zone):",
+        "",
+        _md_table(ev[["event_id", "zone_id", "event_type", "onset_timestamp", "escalation_timestamp",
+                      "end_timestamp", "severity"]]),
+        "",
+        "`data/ground_truth/observation_labels.csv` - derived only from the schedule: shift start in "
+        "[onset, escalation) -> 1 emerging; [escalation, end) -> 2 escalating; else 0.",
+        "",
+        _md_table(lab_counts),
+        "",
+        "## Signal by event phase (descriptive)",
+        "",
+        "Mean observed values over both shifts in the event's zones (NA-aware; unreported values excluded). "
+        "Shows the injected signal is present in the data; it is not a detection result.",
+        "",
+        _md_table(_phase_table(data, sim)),
+        "",
+        "## Synthetic assumptions",
+        "",
+        "- **Heat index** = US NWS approximation (Steadman simple formula; Rothfusz regression when >= 80 F, "
+        "with low/high-humidity adjustments) from reported temperature and humidity. **Not WBGT**: ignores "
+        "radiant heat, wind and workload.",
+        "- **Temperature** = peak hourly shift temperature; **humidity** = shift mean. Site ambient = site base + "
+        f"seasonal sine (+{sim['climate']['seasonal_amplitude_c']} C mid-window) + AR(1) daily weather "
+        f"(phi {sim['climate']['weather_ar1_phi']}, sd {sim['climate']['weather_ar1_sd_c']} C); night "
+        f"-{sim['climate']['night_temp_drop_c']} C, +{sim['climate']['night_rh_rise_pct']} % RH.",
+        "- **Zones**: outdoor = ambient; semi-outdoor +1 C; indoor unconditioned +2 C, -15 % RH; conditioned = "
+        f"setpoint 24 C loosely coupled to ambient; radiant heat +{sim['radiant_heat_offset_c']} C. Scenario "
+        "forcing is damped by zone (conditioned 0.2, indoor unconditioned 0.7, semi-outdoor 0.9, outdoor 1.0).",
+        f"- **Heat strain** = max(0, true heat index - {hm['heat_index_threshold_c']} C) x work-intensity factor "
+        "x exposure hours / 9.5. Outcomes use the *true* environment (sensor noise/faults do not change health).",
+        f"- **Lags** (weights over current and previous shifts): clinical {hm['kernel_clinical']}, absence "
+        f"{hm['kernel_absence']}, incidents {hm['kernel_incident']}.",
+        f"- **Rates**: clinic visits ~ Poisson(present x ({hm['clinical']['base_rate']} + "
+        f"{hm['clinical']['strain_coef']} x lagged strain)); absence ~ Binomial(rostered, "
+        f"{hm['absence']['base_rate']} + {hm['absence']['strain_coef']} x lagged strain, cap "
+        f"{hm['absence']['max_rate']}); incidents ~ Poisson(present x ({hm['incident']['base_rate']} + "
+        f"{hm['incident']['strain_coef']} x lagged strain)); severity mix shifts toward severe as strain rises.",
+        "- **Workforce**: rostered = configured headcount x U(0.9, 1.05); present = rostered - absent; "
+        "`workforce_data.workforce_count` = present, `absenteeism_data.workforce_count` = rostered. "
+        "1 absent shift = 1 lost workday.",
+        "- Parameters are illustrative, not calibrated to any real population, and must not be read as "
+        "epidemiological estimates.",
+        "",
+        "## ML constraints carried into later phases",
+        "",
+        "- Labels and events live only in `data/ground_truth/`; raw sources contain no label columns (tested).",
+        "- Use only rows with `reporting_timestamp <= decision time`; rows never reported have no timestamp.",
+        "- Baselines/thresholds must be fitted on data before the evaluation window or with time-ordered splits.",
+        "- No performance metric is reported until `src/evaluation/` computes it.",
+        "",
+    ])
+
+
+def data_quality_report(data, sim, seed) -> str:
+    dq = sim["data_quality"]
+    rows_missing, rows_status, rows_delay = [], [], []
+    for name in schemas.SOURCE_DATASETS:
+        df = data[name]
+        c = schemas.SOURCE_CONTRACTS[name]
+        nr = df["reporting_status"] == "not_reported"
+        rows_status.append({"dataset": name, "rows": len(df), "reported": int((~nr).sum()),
+                            "not_reported": int(nr.sum())})
+        for f in c.fields:
+            if f.name in KEY or f.name in ("recorded_at", "reporting_status"):
+                continue
+            na = df[f.name].isna()
+            rows_missing.append({"dataset": name, "field": f.name, "missing": int(na.sum()),
+                                 "missing %": 100 * na.mean(), "of which not_reported": int((na & nr).sum()),
+                                 "of which random (reported row)": int((na & ~nr).sum())})
+        h = ((df["reporting_timestamp"] - df["recorded_at"]).dt.total_seconds() / 3600).dropna()
+        rows_delay.append({"dataset": name, "min h": h.min(), "median h": h.median(),
+                           "p95 h": h.quantile(0.95), "max h": h.max(),
+                           "configured": str(dq["reporting_delay_hours"][name])})
+    log = data["data_quality_log"]
+    log_summary = (log.groupby(["issue_id", "source_dataset", "issue_type", "start_timestamp", "end_timestamp",
+                                "details"], sort=True)["zone_id"].agg(lambda z: ", ".join(z))
+                   .reset_index().rename(columns={"zone_id": "zones"}))
+    issues = {n: schemas.validate(data[n], schemas.ALL_CONTRACTS[n]) for n in schemas.ALL_CONTRACTS}
+    val = pd.DataFrame([{"dataset": k, "contract violations": len(v), "details": "; ".join(v) or "-"}
+                        for k, v in issues.items()])
+    return "\n".join([
+        "# PREVENZA Data Quality Report",
+        "",
+        f"> GENERATED by `{GEN_CMD}` (seed **{seed}**). Do not edit by hand. Synthetic data.",
+        "",
+        "Rules: missing values are NA (empty CSV cell), **never 0**. Unreported periods keep their grid row with "
+        "`reporting_status = not_reported` and no `reporting_timestamp`. Derived fields (heat index, total "
+        "exposure, absence rate, totals) are NA whenever an input is NA.",
+        "",
+        "## Contract validation",
+        "",
+        _md_table(val),
+        "",
+        "## Reporting status",
+        "",
+        _md_table(pd.DataFrame(rows_status)),
+        "",
+        "## Missingness by field",
+        "",
+        f"Configured random missing rate per row/field group: `{dq['random_missing_rate']}`.",
+        "",
+        _md_table(pd.DataFrame(rows_missing)),
+        "",
+        "## Reporting delay (reporting_timestamp - recorded_at), reported rows",
+        "",
+        "Includes injected feed delays. These are data-latency facts of the simulation, not system latency.",
+        "",
+        _md_table(pd.DataFrame(rows_delay)),
+        "",
+        "## Injected issues (data/ground_truth/data_quality_log.csv)",
+        "",
+        _md_table(log_summary),
+        "",
+        "Measurement noise: " + ", ".join(f"{k} = {v}" for k, v in dq["measurement_noise"].items()) + ".",
+        "",
+    ])
+
+
+def write_reports(data, sim, seed) -> list[Path]:
+    docs = config.PROJECT_ROOT / "docs"
+    out = []
+    for fname, text in (("simulation_summary.md", simulation_summary(data, sim, seed)),
+                        ("data_quality_report.md", data_quality_report(data, sim, seed))):
+        p = docs / fname
+        p.write_text(text, encoding="utf-8")
+        out.append(p)
+    return out

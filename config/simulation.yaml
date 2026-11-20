@@ -1,0 +1,158 @@
+# PREVENZA / HealthSentinel — synthetic simulation design.
+# 90 days x 3 sites x 3 zones x 2 shifts = 1,620 site-zone-shift observations.
+# All data produced from this config is SYNTHETIC and AGGREGATED. No individuals are modelled.
+# Every parameter below is a synthetic modelling assumption (see docs/simulation_summary.md).
+
+random_seed: 42
+start_date: "2025-06-01"
+n_days: 90                      # 2025-06-01 .. 2025-08-29
+shifts: [day, night]
+
+sites:
+  S01:
+    name: Distribution Centre
+    climate: {day_temp_c: 29.0, rh_day_pct: 50}
+    zones:
+      S01-Z01: {name: Loading dock,    environment: semi_outdoor,         radiant_heat: false, work_intensity: heavy,    headcount: {day: 40, night: 25}}
+      S01-Z02: {name: Warehouse floor, environment: indoor_unconditioned, radiant_heat: false, work_intensity: moderate, headcount: {day: 60, night: 35}}
+      S01-Z03: {name: Packing hall,    environment: indoor_conditioned,   radiant_heat: false, work_intensity: light,    headcount: {day: 50, night: 30}}
+  S02:
+    name: Construction Site
+    climate: {day_temp_c: 31.0, rh_day_pct: 45}
+    zones:
+      S02-Z01: {name: Roofing,         environment: outdoor,              radiant_heat: false, work_intensity: heavy,    headcount: {day: 30, night: 8}}
+      S02-Z02: {name: Groundworks,     environment: outdoor,              radiant_heat: false, work_intensity: heavy,    headcount: {day: 35, night: 10}}
+      S02-Z03: {name: Site compound,   environment: semi_outdoor,         radiant_heat: false, work_intensity: moderate, headcount: {day: 20, night: 6}}
+  S03:
+    name: Manufacturing Plant
+    climate: {day_temp_c: 28.0, rh_day_pct: 55}
+    zones:
+      S03-Z01: {name: Foundry,         environment: indoor_unconditioned, radiant_heat: true,  work_intensity: heavy,    headcount: {day: 45, night: 40}}
+      S03-Z02: {name: Assembly,        environment: indoor_conditioned,   radiant_heat: false, work_intensity: moderate, headcount: {day: 70, night: 50}}
+      S03-Z03: {name: Outdoor yard,    environment: outdoor,              radiant_heat: false, work_intensity: moderate, headcount: {day: 25, night: 12}}
+
+# ---------------------------------------------------------------------------------------------
+# Environment model (synthetic assumptions)
+# ---------------------------------------------------------------------------------------------
+climate:
+  seasonal_amplitude_c: 3.0       # mid-season (day ~55) is this much warmer than the window edges
+  night_temp_drop_c: 8.0
+  night_rh_rise_pct: 15
+  weather_ar1_phi: 0.7            # site-level daily weather anomaly, AR(1)
+  weather_ar1_sd_c: 1.5
+  rh_daily_sd_pct: 5
+zone_environment:                 # applied to site ambient conditions
+  outdoor:              {temp_offset_c: 0.0, rh_offset_pct: 0,  forcing_factor: 1.0}
+  semi_outdoor:         {temp_offset_c: 1.0, rh_offset_pct: 0,  forcing_factor: 0.9}
+  indoor_unconditioned: {temp_offset_c: 2.0, rh_offset_pct: -15, forcing_factor: 0.7}
+  indoor_conditioned:   {setpoint_c: 24.0, coupling: 0.2, rh_pct: 45, forcing_factor: 0.2}
+radiant_heat_offset_c: 3.0        # added to air temperature near furnaces
+
+# ---------------------------------------------------------------------------------------------
+# Workforce and health-response model (synthetic assumptions)
+# ---------------------------------------------------------------------------------------------
+workforce:
+  roster_variation: [0.9, 1.05]   # uniform multiplier on configured headcount
+  base_exposure_hours: {mean: 9.5, sd: 0.4, max: 12.0}
+  intensity_factor: {light: 0.5, moderate: 1.0, heavy: 1.5}
+health_model:
+  heat_index_threshold_c: 32.0    # ~NWS "extreme caution" (90 F); strain accrues above this
+  # Lag kernels over preceding shifts (index 0 = same shift). Clinical visits lag heat; absence lags further.
+  kernel_clinical:  [0.2, 0.35, 0.25, 0.15, 0.05]
+  kernel_absence:   [0.0, 0.1, 0.2, 0.3, 0.25, 0.15]
+  kernel_incident:  [0.5, 0.3, 0.2]
+  clinical: {base_rate: 0.002, strain_coef: 0.006, p_severity_base: [0.80, 0.17, 0.03], p_severity_high: [0.55, 0.30, 0.15]}
+  absence:  {base_rate: 0.03,  strain_coef: 0.006, max_rate: 0.40}
+  incident: {base_rate: 0.0015, strain_coef: 0.002, p_severity_base: [0.80, 0.17, 0.03], p_severity_high: [0.60, 0.28, 0.12]}
+  high_strain_level: 15.0         # strain at which severity mix reaches p_severity_high
+
+# ---------------------------------------------------------------------------------------------
+# Scenarios (dates and locations configurable). Scenario A (normal operations) applies everywhere
+# outside these windows. Dates are inclusive calendar dates; both shifts are affected unless 'shifts' given.
+# ---------------------------------------------------------------------------------------------
+scenarios:
+  - id: EVT-001
+    type: gradual_heatwave_escalation          # Scenario B
+    zones: [S02-Z01, S02-Z02, S02-Z03]
+    onset_date: "2025-06-26"
+    escalation_date: "2025-07-02"
+    end_date: "2025-07-10"
+    temp_delta_c: 4.5
+    rh_delta_pct: 5
+    exposure_delta_hours: 1.0
+    severity: high
+    description: "Gradual heatwave at construction site: temperature/humidity ramp, longer exposure, delayed clinic visits, then absence and incidents."
+  - id: EVT-002
+    type: gradual_heatwave_escalation          # Scenario B (second instance)
+    zones: [S03-Z01]
+    onset_date: "2025-08-04"
+    escalation_date: "2025-08-09"
+    end_date: "2025-08-16"
+    temp_delta_c: 4.0
+    rh_delta_pct: 5
+    exposure_delta_hours: 0.8
+    severity: moderate
+    description: "Heat build-up in foundry during hot spell; ventilation insufficient."
+  - id: EVT-003
+    type: isolated_temperature_spike           # Scenario C (negative control)
+    zones: [S01-Z02]
+    onset_date: "2025-07-18"
+    end_date: "2025-07-18"
+    shifts: [day]
+    temp_delta_c: 8.0
+    rh_delta_pct: 0
+    exposure_delta_hours: 0.0
+    severity: none
+    description: "Single-shift temperature spike in warehouse; no sustained health deterioration expected."
+  - id: EVT-004
+    type: isolated_temperature_spike           # Scenario C (negative control)
+    zones: [S03-Z03]
+    onset_date: "2025-06-15"
+    end_date: "2025-06-15"
+    shifts: [day]
+    temp_delta_c: 7.0
+    rh_delta_pct: 0
+    exposure_delta_hours: 0.0
+    severity: none
+    description: "Single-shift temperature spike in outdoor yard; no sustained health deterioration expected."
+  - id: EVT-005
+    type: heat_escalation_clinical_gap         # Scenario D
+    zones: [S01-Z01]
+    onset_date: "2025-07-22"
+    escalation_date: "2025-07-27"
+    end_date: "2025-08-03"
+    temp_delta_c: 4.5
+    rh_delta_pct: 5
+    exposure_delta_hours: 0.8
+    severity: moderate
+    clinical_gap: {start_date: "2025-07-24", end_date: "2025-08-04"}
+    description: "Heat escalation at loading dock while the clinic stops reporting; environment, workforce, absence and incident feeds continue."
+
+# ---------------------------------------------------------------------------------------------
+# Data-quality injection
+# ---------------------------------------------------------------------------------------------
+data_quality:
+  measurement_noise: {temperature_sd_c: 0.5, rh_sd_pct: 2.0, exposure_hours_sd: 0.3}
+  random_missing_rate:            # per row, per field group; value(s) set NA (never 0)
+    environmental_data: 0.02      # temperature and humidity independently
+    workforce_data: 0.01
+    clinical_data: 0.01
+    absenteeism_data: 0.015
+    incident_data: 0.01
+  reporting_delay_hours:          # reporting_timestamp - recorded_at
+    environmental_data: {dist: uniform, low: 0.08, high: 0.5}
+    workforce_data:     {dist: uniform, low: 0.5,  high: 3.0}
+    clinical_data:      {dist: uniform, low: 12.0, high: 48.0}
+    absenteeism_data:   {dist: uniform, low: 36.0, high: 60.0}
+    incident_data:      {dist: lognormal, median: 18.0, sigma: 0.9, low: 1.0, high: 96.0}
+  reporting_gaps:                 # whole periods not reported (rows kept, values NA)
+    - {source: environmental_data, zones: [S02-Z02], start_date: "2025-08-20", end_date: "2025-08-22"}
+    - {source: absenteeism_data,   zones: [S03-Z01, S03-Z02, S03-Z03], start_date: "2025-06-10", end_date: "2025-06-12"}
+  feed_delays:
+    - {source: absenteeism_data, zones: [S02-Z01, S02-Z02, S02-Z03], start_date: "2025-07-01", end_date: "2025-07-07", extra_hours: 96}
+    - {source: clinical_data,    zones: [S03-Z01], start_date: "2025-08-08", end_date: "2025-08-12", extra_hours: 48}
+  anomalies:                      # environmental sensor faults, placed outside scenario windows and gaps
+    sensor_spikes: 4
+    spike_delta_c: [8.0, 12.0]
+    stuck_sensors: 2
+    stuck_length_shifts: 4

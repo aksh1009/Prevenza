@@ -1,0 +1,16 @@
+issue_id,source_dataset,issue_type,site_id,zone_id,start_timestamp,end_timestamp,details
+DQ-001,environmental_data,sensor_spike,S01,S01-Z03,2025-06-05 18:00,2025-06-06 06:00,temperature +9.9 C single shift
+DQ-002,absenteeism_data,reporting_gap,S03,S03-Z01,2025-06-10 06:00,2025-06-13 06:00,not reported 2025-06-10..2025-06-12
+DQ-002,absenteeism_data,reporting_gap,S03,S03-Z02,2025-06-10 06:00,2025-06-13 06:00,not reported 2025-06-10..2025-06-12
+DQ-002,absenteeism_data,reporting_gap,S03,S03-Z03,2025-06-10 06:00,2025-06-13 06:00,not reported 2025-06-10..2025-06-12
+DQ-003,environmental_data,sensor_spike,S01,S01-Z03,2025-06-22 06:00,2025-06-22 18:00,temperature +11.9 C single shift
+DQ-004,environmental_data,sensor_spike,S01,S01-Z02,2025-06-27 06:00,2025-06-27 18:00,temperature +8.9 C single shift
+DQ-005,environmental_data,sensor_spike,S03,S03-Z01,2025-06-27 06:00,2025-06-27 18:00,temperature +9.7 C single shift
+DQ-006,absenteeism_data,feed_delay,S02,S02-Z01,2025-07-01 06:00,2025-07-08 06:00,+96 h reporting delay 2025-07-01..2025-07-07
+DQ-006,absenteeism_data,feed_delay,S02,S02-Z02,2025-07-01 06:00,2025-07-08 06:00,+96 h reporting delay 2025-07-01..2025-07-07
+DQ-006,absenteeism_data,feed_delay,S02,S02-Z03,2025-07-01 06:00,2025-07-08 06:00,+96 h reporting delay 2025-07-01..2025-07-07
+DQ-007,clinical_data,reporting_gap,S01,S01-Z01,2025-07-24 06:00,2025-08-05 06:00,scenario EVT-005: clinic not reporting 2025-07-24..2025-08-04
+DQ-008,clinical_data,feed_delay,S03,S03-Z01,2025-08-08 06:00,2025-08-13 06:00,+48 h reporting delay 2025-08-08..2025-08-12
+DQ-009,environmental_data,stuck_sensor,S01,S01-Z02,2025-08-18 06:00,2025-08-20 06:00,temperature/humidity frozen at previous value for 4 shifts
+DQ-010,environmental_data,reporting_gap,S02,S02-Z02,2025-08-20 06:00,2025-08-23 06:00,not reported 2025-08-20..2025-08-22
+DQ-011,environmental_data,stuck_sensor,S01,S01-Z02,2025-08-23 18:00,2025-08-25 18:00,temperature/humidity frozen at previous value for 4 shifts

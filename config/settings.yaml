@@ -1,0 +1,55 @@
+# HealthSentinel — global settings (non-simulation).
+# All values here are configuration, not results. Model thresholds are added in later phases.
+
+project:
+  name: HealthSentinel
+  use_case: occupational_heat_health_risk
+  timezone_note: "All timestamps are site-local, timezone-naive. All simulated sites share one timezone."
+
+paths:
+  raw: data/raw
+  processed: data/processed
+  ground_truth: data/ground_truth
+  docs: docs
+
+storage:
+  raw_format: csv          # mimics delivered source feeds; human-inspectable
+  processed_format: parquet
+  ground_truth_format: csv
+
+observation_key:
+  fields: [observation_date, site_id, zone_id, shift]
+  # A night shift belongs to the calendar date on which it STARTS.
+  shifts:
+    day:   {start: "06:00", end: "18:00"}
+    night: {start: "18:00", end: "06:00"}   # ends on date + 1
+
+# Nominal source latency (recorded_at -> reporting_timestamp), hours. The simulator's actual delay
+# distributions live in config/simulation.yaml: data_quality.reporting_delay_hours.
+expected_latency_hours:
+  environmental_data: 0.25
+  workforce_data: 1.5
+  clinical_data: 30
+  absenteeism_data: 48
+  incident_data: 18            # median; incidents are reported with variable delay
+
+missing_data:
+  policy: "Missing is never zero. Missing values stay NaN/<NA>; unreported periods carry reporting_status = not_reported."
+
+privacy:
+  min_cell_size: 5                # counts 1..4 suppressed in role views (0 may be shown)
+  suppression_marker: "<5"
+  prohibited_uses:
+    - individual employment decisions
+    - disciplinary action
+    - individual performance assessment
+    - clinical diagnosis of individuals
+  roles:
+    occupational_health_lead:
+      sees: [zone_shift_risk, contributing_signals, clinical_aggregates_suppressed, recommendations]
+    site_hse_manager:
+      sees: [zone_shift_risk, contributing_signals, incident_aggregates_suppressed, recommendations]
+    operations_supervisor:
+      sees: [zone_shift_risk, recommendations]          # no health counts
+    regulator_public_health:
+      sees: [site_week_aggregates_suppressed, alert_log, evaluation_report]

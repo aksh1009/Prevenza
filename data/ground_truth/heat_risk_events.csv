@@ -1,0 +1,8 @@
+event_id,site_id,zone_id,event_type,onset_timestamp,escalation_timestamp,end_timestamp,severity,description
+EVT-001,S02,S02-Z01,gradual_heatwave_escalation,2025-06-26 06:00,2025-07-02 06:00,2025-07-11 06:00,high,"Gradual heatwave at construction site: temperature/humidity ramp, longer exposure, delayed clinic visits, then absence and incidents."
+EVT-001,S02,S02-Z02,gradual_heatwave_escalation,2025-06-26 06:00,2025-07-02 06:00,2025-07-11 06:00,high,"Gradual heatwave at construction site: temperature/humidity ramp, longer exposure, delayed clinic visits, then absence and incidents."
+EVT-001,S02,S02-Z03,gradual_heatwave_escalation,2025-06-26 06:00,2025-07-02 06:00,2025-07-11 06:00,high,"Gradual heatwave at construction site: temperature/humidity ramp, longer exposure, delayed clinic visits, then absence and incidents."
+EVT-002,S03,S03-Z01,gradual_heatwave_escalation,2025-08-04 06:00,2025-08-09 06:00,2025-08-17 06:00,moderate,Heat build-up in foundry during hot spell; ventilation insufficient.
+EVT-003,S01,S01-Z02,isolated_temperature_spike,2025-07-18 06:00,,2025-07-18 18:00,none,Single-shift temperature spike in warehouse; no sustained health deterioration expected.
+EVT-004,S03,S03-Z03,isolated_temperature_spike,2025-06-15 06:00,,2025-06-15 18:00,none,Single-shift temperature spike in outdoor yard; no sustained health deterioration expected.
+EVT-005,S01,S01-Z01,heat_escalation_clinical_gap,2025-07-22 06:00,2025-07-27 06:00,2025-08-04 06:00,moderate,"Heat escalation at loading dock while the clinic stops reporting; environment, workforce, absence and incident feeds continue."
