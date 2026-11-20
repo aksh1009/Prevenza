@@ -9,6 +9,9 @@ Metric provenance:
 """
 from __future__ import annotations
 
+import html
+
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -28,6 +31,10 @@ DETECTION_METRICS = [("event", "event_zones_included"), ("event", "event_zones_d
                      ("episode", "false_alerts_per_site_week"), ("episode", "median_episode_duration_hours"),
                      ("observation", "precision"), ("observation", "recall"), ("observation", "f1"),
                      ("observation", "false_positive_rate")]
+HIGHER_BETTER = {"event_zones_detected", "event_sensitivity", "mean_detection_coverage",
+                 "median_lead_time_to_escalation_hours", "episode_ppv", "precision", "recall", "f1"}
+LOWER_BETTER = {"median_detection_delay_hours", "controls_with_false_alert", "false_alerts_per_site_week",
+                "false_positive_rate"}
 FC_MODELS = ["persistence (health alert)", "persistence (any warning)", "logistic regression"]
 SUBSETS = [
     ("validation", "all validation rows", "Validation (out-of-sample; LR = train-only selection model)"),
@@ -35,6 +42,7 @@ SUBSETS = [
     ("test", "excluding rows whose target is EVT-005", "Held-out test — excluding EVT-005 targets"),
     ("test", "unseen-event subset", "Unseen-event test (EVT-002 + unaffected negatives)"),
 ]
+SCOPE_LABEL = {"event": "Event-level", "episode": "Episode-level", "observation": "Observation-level"}
 
 
 def detection_table(bm: pd.DataFrame, window: str) -> pd.DataFrame:
@@ -108,14 +116,35 @@ def false_alerts_site(window: str) -> pd.DataFrame:
     return pd.concat(out, ignore_index=True) if out else pd.DataFrame()
 
 
-def _fmt_table(df: pd.DataFrame) -> pd.DataFrame:
-    return df.round(3)
+def styled_benchmark(tbl: pd.DataFrame):
+    """Humanised metric rows; best value per row (direction-aware) tinted #EFF6FF."""
+    models = [c for c in tbl.columns if c not in ("scope", "metric")]
+    show = tbl.copy()
+    show.insert(0, "Scope", show.pop("scope").map(SCOPE_LABEL))
+    show.insert(1, "Metric", show.pop("metric"))
+
+    def tint(row):
+        metric = tbl.loc[row.name, "metric"]
+        vals = pd.to_numeric(row[models], errors="coerce")
+        out = [""] * len(row)
+        if vals.notna().sum() < 2 or metric not in HIGHER_BETTER | LOWER_BETTER:
+            return out
+        best = vals.max() if metric in HIGHER_BETTER else vals.min()
+        for i, c in enumerate(row.index):
+            if c in models and vals.get(c) == best:
+                out[i] = f"background-color: {T.ACCENT_SUBTLE}; color: {T.ACCENT}; font-weight: 600"
+        return out
+
+    show["Metric"] = show["Metric"].map(C.humanize)
+    def fmt(v):
+        if pd.isna(v):
+            return "—"
+        return f"{v:.0f}" if float(v).is_integer() else f"{v:.3f}"
+
+    return show.style.apply(tint, axis=1).format({m: fmt for m in models})
 
 
 def render(f) -> None:
-    C.header("Model evaluation", "Evaluation-only page: compares detection and forecasting outputs with the "
-                                 "simulation's ground truth. Global filters do not apply here.",
-             chips=["Evaluation only", "Synthetic events"])
     C.limitation(T.EVALUATION_LIMITATION)
     st.caption("Metrics are read from saved evaluation outputs. Thresholds were fixed before evaluation; nothing on "
                "this page can change a model, threshold or score.")
@@ -123,53 +152,60 @@ def render(f) -> None:
 
     with tab1:
         bm = load_evaluation("backtest_metrics")
-        window = st.radio("Evaluation window", ["full", "comparison"], horizontal=True, key="ev_window",
-                          format_func=lambda w: {"full": "Full window (A and C; no fitted parameters)",
-                                                 "comparison": "Comparison window (A, B, C on identical out-of-sample rows)"}[w])
+        window = st.segmented_control("Evaluation window", ["full", "comparison"], default="full", key="ev_window",
+                                      format_func=lambda w: {"full": "Full window (A & C)",
+                                                             "comparison": "Comparison window (A, B, C · identical out-of-sample rows)"}[w])
+        window = window or "full"
         tbl = detection_table(bm, window)
-        st.dataframe(_fmt_table(tbl), hide_index=True, key="ev_det")
-        C.download(tbl, f"prevenza_detection_metrics_{window}.csv", key="dl_det")
+        with C.card("bench", "Benchmark metrics", "best value per metric tinted · direction-aware"):
+            st.dataframe(styled_benchmark(tbl), hide_index=True, key="ev_det")
+            C.download(tbl, f"prevenza_detection_metrics_{window}.csv", key="dl_det")
         cols = st.columns(3)
         for col, m in zip(cols, ["A", "B", "C"]):
             s = bm[(bm["window"] == window) & (bm["model"] == m) & (bm["scope"] == "observation")].set_index("metric")["value"]
-            if s.empty:
-                col.info(f"{MODEL_NAMES[m]}: not evaluable in this window (in-sample period).")
-                continue
-            col.plotly_chart(charts.confusion(s["tp"], s["fp"], s["fn"], s["tn"], f"{MODEL_NAMES[m]} — observations"),
-                             theme=None, key=f"ev_cm_{m}_{window}")
+            with col, C.card(f"cm_{m}", MODEL_NAMES[m], "observation-level"):
+                if s.empty:
+                    C.empty_state("Not evaluable in this window",
+                                  "Isolation Forest scores are in-sample before its training cutoff; use the comparison window.")
+                else:
+                    C.chart(charts.confusion(s["tp"], s["fp"], s["fn"], s["tn"]), f"ev_cm_{m}_{window}")
         comp = []
-        for metric, scope, label in (("precision", "observation", "precision"), ("recall", "observation", "recall"),
-                                     ("f1", "observation", "F1"), ("event_sensitivity", "event", "event sensitivity"),
-                                     ("episode_ppv", "episode", "episode PPV")):
+        for metric, scope, label in (("precision", "observation", "Precision"), ("recall", "observation", "Recall"),
+                                     ("f1", "observation", "F1"), ("event_sensitivity", "event", "Event sensitivity"),
+                                     ("episode_ppv", "episode", "Episode PPV")):
             for m in ("A", "B", "C"):
                 v = bm[(bm["window"] == window) & (bm["model"] == m) & (bm["metric"] == metric) & (bm["scope"] == scope)]
                 if len(v):
                     comp.append({"metric": label, "model": MODEL_NAMES[m], "value": float(v["value"].iloc[0])})
-        if comp:
-            st.plotly_chart(charts.grouped_bars(pd.DataFrame(comp), "metric", "value", "model",
-                                                "Detection model comparison", "value (0-1)", T.MODEL_COLORS),
-                            theme=None, key=f"ev_cmp_{window}")
+        with C.card("cmp", "Model comparison", "0–1 scale"):
+            if comp:
+                C.chart(charts.grouped_bars(pd.DataFrame(comp), "metric", "value", "model", "value", T.MODEL_COLORS),
+                        f"ev_cmp_{window}")
         ev = load_evaluation("event_results")
         ev = ev[ev["window"] == window].copy()
         ev["model"] = ev["model"].map(MODEL_NAMES)
-        st.subheader("Event-level detection")
-        evt = ev[["model", "event_id", "zone_id", "role", "included", "excluded_reason", "detected", "first_alert_decision",
-                  "detection_delay_hours", "lead_time_to_escalation_hours", "coverage", "n_matched_episodes",
-                  "control_false_alert"]].sort_values(["event_id", "zone_id", "model"])
-        st.dataframe(evt, hide_index=True, key="ev_events")
-        C.download(evt, f"prevenza_event_detection_{window}.csv", key="dl_ev")
-        lt = ev[ev["included"].astype(bool) & ev["detected"].astype("boolean").fillna(False).astype(bool)]
-        if len(lt):
-            st.plotly_chart(charts.lead_time_bars(pd.DataFrame({"unit": lt["event_id"] + " " + lt["zone_id"],
+        c1, c2 = st.columns([7, 5])
+        with c1, C.card("events", "Event-level detection", "per event-zone"):
+            evt = ev[["model", "event_id", "zone_id", "role", "included", "detected", "first_alert_decision",
+                      "detection_delay_hours", "lead_time_to_escalation_hours", "coverage", "n_matched_episodes",
+                      "control_false_alert"]].sort_values(["event_id", "zone_id", "model"])
+            evt = evt.assign(role=evt["role"].str.replace("_", " ").str.capitalize())
+            C.table(C.humanize_frame(evt), "ev_events", height=360)
+            C.download(evt, f"prevenza_event_detection_{window}.csv", key="dl_ev")
+        with c2, C.card("lead", "Lead time to escalation", "detected event-zones · 0 h = escalation"):
+            lt = ev[ev["included"].astype(bool) & ev["detected"].astype("boolean").fillna(False).astype(bool)]
+            if len(lt):
+                C.chart(charts.lead_time_dumbbell(pd.DataFrame({"unit": lt["event_id"] + " " + lt["zone_id"],
                                                                 "model": lt["model"],
-                                                                "hours": lt["lead_time_to_escalation_hours"]}),
-                                                  "Lead time to escalation (detected event-zones)"),
-                            theme=None, key=f"ev_lead_{window}")
+                                                                "hours": lt["lead_time_to_escalation_hours"]})),
+                        f"ev_lead_{window}")
+            else:
+                C.empty_state("No detected events in this window")
         fa = false_alerts_site(window)
-        if len(fa):
-            st.plotly_chart(charts.grouped_bars(fa, "site_id", "false_alerts_per_week", "model",
-                                                "False alert episodes per site per week", "false episodes / week",
-                                                T.MODEL_COLORS), theme=None, key=f"ev_fa_{window}")
+        with C.card("fa", "False alert episodes per site per week", "unmatched + control episodes"):
+            if len(fa):
+                C.chart(charts.grouped_bars(fa, "site_id", "false_alerts_per_week", "model", "episodes / week",
+                                            T.MODEL_COLORS), f"ev_fa_{window}")
 
     with tab2:
         ms = load_evaluation("model_summary")
@@ -185,29 +221,35 @@ def render(f) -> None:
                "test. Training-period rows are in-sample and shown only for transparency. Scores are uncalibrated "
                "rankings; PR-AUC uses them only for ranking.")
         tbl = pd.concat([forecast_table(ms), in_sample_table(fe)], ignore_index=True)
-        st.dataframe(_fmt_table(tbl), hide_index=True, key="ev_fc")
-        C.download(tbl, "prevenza_forecast_metrics.csv", key="dl_fc")
+        with C.card("fct", "Forecast vs persistence", "validation · held-out test · unseen event · in-sample"):
+            show = C.humanize_frame(tbl.assign(model=tbl["model"].str.capitalize()))
+            C.table(show, "ev_fc", formats={c: st.column_config.NumberColumn(format="%.3f")
+                                            for c in ("Precision", "Recall", "F1", "PR-AUC")})
+            C.download(tbl, "prevenza_forecast_metrics.csv", key="dl_fc")
         plot = tbl.melt(id_vars=["evaluation", "model"], value_vars=["precision", "recall", "f1", "pr_auc"])
-        sel = st.selectbox("Compare models on", [s[2] for s in SUBSETS], index=3, key="ev_fc_subset")
-        p = plot[plot["evaluation"] == sel]
-        st.plotly_chart(charts.grouped_bars(p, "variable", "value", "model", f"Forecast vs persistence — {sel}",
-                                            "value (0-1)", T.MODEL_COLORS), theme=None, key="ev_fc_bars")
+        plot["variable"] = plot["variable"].map(C.humanize)
+        c1, _ = st.columns([2, 1])
+        sel = c1.selectbox("Compare models on", [s[2] for s in SUBSETS], index=3, key="ev_fc_subset")
+        with C.card("fcbars", f"Forecast vs persistence — {sel}", "0–1 scale"):
+            C.chart(charts.grouped_bars(plot[plot["evaluation"] == sel], "variable", "value", "model", "value",
+                                        T.MODEL_COLORS), "ev_fc_bars")
         cols = st.columns(3)
         for col, (m, d) in zip(cols, test_confusions(fe).items()):
-            col.plotly_chart(charts.confusion(d["tp"], d["fp"], d["fn"], d["tn"], f"{m} — held-out test"),
-                             theme=None, key=f"ev_fccm_{m}")
-        st.subheader("Event-level forecast results")
-        evr = ms[(ms["phase"] == "4B forecast") & ms["subset"].str.startswith("event ")]
-        evr = evr.pivot_table(index=["evaluation", "subset", "model"], columns="metric", values="value").reset_index()
-        st.dataframe(_fmt_table(evr), hide_index=True, key="ev_fc_events")
+            with col, C.card(f"fccm_{m[:5]}{len(m)}", m.capitalize(), "held-out test"):
+                C.chart(charts.confusion(d["tp"], d["fp"], d["fn"], d["tn"]), f"ev_fccm_{m}")
+        with C.card("fcev", "Event-level forecast results", "hours relative to onset / escalation"):
+            evr = ms[(ms["phase"] == "4B forecast") & ms["subset"].str.startswith("event ")]
+            evr = evr.pivot_table(index=["evaluation", "subset", "model"], columns="metric", values="value").reset_index()
+            C.table(C.humanize_frame(evr), "ev_fc_events")
 
     with tab3:
         doc = config.PROJECT_ROOT / "docs" / "pre_dashboard_audit.md"
         if doc.exists():
             text = doc.read_text(encoding="utf-8")
             summary = text.split("## Summary", 1)[-1].split("## 1.", 1)[0]
-            st.markdown("#### Audit summary\n" + summary)
-            with st.expander("Full pre-dashboard audit (docs/pre_dashboard_audit.md)"):
+            with C.card("audit", "Audit summary", "docs/pre_dashboard_audit.md"):
+                st.markdown(summary)
+            with st.expander("Full pre-dashboard audit"):
                 st.markdown(text)
         else:
-            C.empty_state("docs/pre_dashboard_audit.md not found. Generate it with `python -m src.evaluation.audit`.")
+            C.empty_state("Audit document not found", "Generate it with python -m src.evaluation.audit.")

@@ -9,53 +9,66 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from src import config
 from src.dashboard import components as C
-from src.dashboard import theme as T
 from src.dashboard.data_loader import DataUnavailable, LeakageError, clear_cache, load_operational, status
 from src.dashboard.filters import Filters
-from src.dashboard.pages import PAGES, SLUGS
+from src.dashboard.pages import META, PAGES, SLUGS
+from src.dashboard.ribbon import filter_ribbon
 
 st.set_page_config(page_title="Prevenza — Synthetic Demonstrator", page_icon="🛡️", layout="wide",
                    initial_sidebar_state="expanded")
 C.inject_css()
 
 
-def sidebar() -> tuple[str, Filters]:
+def _load_assessments():
+    try:
+        return load_operational("assessments")
+    except DataUnavailable:
+        return None
+
+
+def sidebar(A) -> str:
     with st.sidebar:
         C.brand()
-        st.caption("Population & Workforce Health Early Warning · synthetic demonstrator")
         if "nav" not in st.session_state and st.query_params.get("page") in SLUGS:   # deep link: ?page=alerts
             st.session_state["nav"] = SLUGS[st.query_params["page"]]
-        page = st.radio("Navigate", list(PAGES), key="nav", label_visibility="collapsed")
-        st.divider()
-        st.markdown("**Filters**")
-        try:
-            A = load_operational("assessments")
-        except DataUnavailable:
-            return page, Filters()
-        sites = st.multiselect("Site", sorted(A["site_id"].unique()), key="f_sites", placeholder="All sites")
-        zone_opts = sorted(A.loc[A["site_id"].isin(sites) if sites else A.index, "zone_id"].unique())
-        zones = st.multiselect("Zone", zone_opts, key="f_zones", placeholder="All zones")
-        shifts = st.multiselect("Shift", ["day", "night"], key="f_shifts", placeholder="Both shifts")
-        lo, hi = A["observation_date"].min().date(), A["observation_date"].max().date()
-        dr = st.date_input("Observation dates (simulated period)", value=(lo, hi), min_value=lo, max_value=hi,
-                           key="f_dates")
-        classes = st.multiselect("Risk classification", T.CLASS_ORDER, key="f_classes", placeholder="All classes")
-        st.caption("Filters only change what is displayed. There are no controls for model settings or thresholds.")
-        st.divider()
-        if st.button("Reload saved outputs", help="Re-read Parquet files after the pipeline has been re-run"):
+        page = st.radio("Navigate", list(PAGES), key="nav", label_visibility="collapsed",
+                        format_func=lambda p: f":material/{C.NAV_ICONS[p]}: {p}")
+        C.rail_divider()
+        if A is not None:
+            first, last = A["observation_date"].min(), A["observation_date"].max()
+            C.snapshot(f"{first:%d %b} – {last:%d %b %Y}", len(A), config.load_simulation()["random_seed"])
+        st.write("")
+        if st.button("Reload saved outputs", help="Re-read Parquet files after the pipeline has been re-run",
+                     use_container_width=True):
             clear_cache()
             st.rerun()
         with st.expander("Data files"):
-            s = status()
-            st.dataframe(s[["dataset", "kind", "available"]], hide_index=True)
-    date_range = tuple(dr) if isinstance(dr, (tuple, list)) and len(dr) == 2 else None
-    return page, Filters(sites, zones, shifts, date_range, classes)
+            for r in status().itertuples():
+                st.caption(f"{'●' if r.available else '○'} {r.dataset} · {r.kind}")
+    return page
+
+
+def as_of_text(A, key: str | None) -> str | None:
+    if A is None:
+        return None
+    v = st.session_state.get(key) if key else None
+    t = pd.Timestamp(v) if v is not None else A["decision_time"].max()
+    return t.strftime("%d %b %Y %H:%M")
 
 
 def main() -> None:
-    page, filters = sidebar()
+    A = _load_assessments()
+    page = sidebar(A)
     C.disclaimer()
+    subtitle, pills, asof_key, filters_on = META[page]
+    if subtitle is not None:                              # the front page draws its own hero
+        if A is not None:
+            first, last = A["observation_date"].min(), A["observation_date"].max()
+            pills = [f"Simulated period {first:%d %b} – {last:%d %b %Y}"] + pills
+        C.page_header(page, subtitle, pills, as_of_text(A, asof_key))
+    filters = filter_ribbon(A, filters_on) if (A is not None and subtitle is not None) else Filters()
     try:
         PAGES[page].render(filters)
     except DataUnavailable as e:

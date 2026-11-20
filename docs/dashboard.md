@@ -3,13 +3,31 @@
 `streamlit run app.py` — a **read-only** view over saved pipeline outputs. Launching the dashboard never regenerates
 data, refits models, recomputes risk fusion, or writes files (tested).
 
-## Visual design
+## Visual design — clinical-industrial light workspace
 
-Dark operations-console theme (`.streamlit/config.toml` + `src/dashboard/theme.py`): navy sidebar with highlighted
-navigation, icon KPI cards, panel cards, risk heatmap (zones × days), alerts feed, classification donut, category-driver
-bars, and a heat-index **measurement** gauge with NWS danger bands (the forecast page never uses a gauge). Risk
-classes always carry a symbol + label (● ▲ ◆ ■ ✖ ◌), never colour alone. No real-time labels, deltas or impact figures
-are shown because none exist in the simulated data.
+- **Frame:** obsidian-navy navigation rail (248 px: brand lockup, 6-page nav, dataset snapshot, reload/data files);
+  alabaster canvas (#F8FAFC) with white hairline-bordered cards (#E2E8F0, 8 px radius, no shadows); sticky amber
+  governance bar carrying the synthetic-demonstrator disclaimer; page header with metadata pills and a monospace
+  "As of" badge; a horizontal **global filter ribbon** (Site, Zone, Shift, Observation period, Risk classification,
+  Reset) — locked with an explicit "Evaluation-only view · Global filters disabled" badge on Model evaluation.
+  Streamlit chrome (toolbar, menu, footer, decoration) is hidden.
+- **Type:** IBM Plex Sans (UI/headings, 600 max) + IBM Plex Mono (timestamps, IDs, numbers); tabular numerals.
+- **Tokens:** `src/dashboard/theme.py` — every semantic state (6 risk classes + missing, stale, invalid,
+  forecast) has an ink / fill / border / series colour and a glyph; evidence streams use a fixed muted palette.
+- **Components** (`components.py`): KPI cards with eyebrow + monochrome icon + optional semantic left border; status
+  badges (glyph + text); segmented evidence bars; reliability bars; callouts (method / limitation / invalid);
+  dashed empty states; humanised table headers (`humanize`) and Yes/No text instead of checkboxes.
+- **Charts** (`charts.py`, Plotly template `prevenza`, mode bar hidden): thin-ring donut; 100 % stacked site bars;
+  zone × day matrix (pale → amber → crimson, pale = no score); day/night classification tile strip; **five
+  synchronised category small multiples** (no spaghetti); elevated-stream highlighting around alert episodes;
+  sorted contribution bars ("+23.0 pts · score 73"); step-line availability; horizontal latency/staleness boxes;
+  category-status matrix; monochrome confusion matrices with row %; lead-time **dumbbell** plot.
+- **Heat index:** the rainbow gauge was replaced by a thermal readout card with a linear NWS bullet bar
+  (caution 27 · extreme caution 32 · danger 39 · extreme danger 51 °C) and an "Outside NWS chart range" badge.
+- **Deliberate deviations:** the forecast threshold line shows the saved model's fixed threshold (0.666), not a
+  designed value; navigation uses a styled sidebar radio (keeps tests/deep links); row navigation uses an
+  "Investigate zone" selector because Streamlit tables cannot be made clickable without checkboxes; no PR curve is
+  shown because detection models have no saved curve data.
 
 ## Architecture
 
