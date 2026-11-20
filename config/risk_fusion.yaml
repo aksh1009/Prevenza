@@ -80,6 +80,15 @@ max_staleness_hours:
   abs: 96
   inc: 72
 
+# Measurement validity (Phase 4C audit). Values are never clipped or altered; rows outside the NWS heat-index chart
+# range are flagged in assessments/explanations so extrapolated magnitudes cannot silently drive risk claims.
+measurement_validity:
+  heat_index:
+    heat_index_feature: heat_index_celsius_last
+    temperature_feature: temperature_celsius_last
+    max_temperature_c: 43.3   # 110 F, top of the NWS chart
+    max_heat_index_c: 58.3    # ~137 F, highest tabulated NWS heat-index value
+
 # Isolation Forest: blended into the fused score ONLY for out-of-sample rows (split == eval). In-sample rows
 # (training period) are reported but not used, because that model was fitted on later data.
 isolation_forest:

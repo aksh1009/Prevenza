@@ -26,6 +26,7 @@ import yaml
 
 from src import config, schemas
 from src.features.build import FEATURES_FILE
+from src.features.quality import heat_index_validity
 
 KEY = list(schemas.OBSERVATION_KEY)
 SERIES = ["site_id", "zone_id", "shift"]
@@ -48,6 +49,9 @@ def required_columns(cfg: dict) -> list[str]:
     for c in cfg["categories"].values():
         cols |= {c["primary"], c["observed"], c["baseline"], c["cusum"], f"{c['source']}_staleness_hours"}
         cols |= {comp["feature"] for comp in c["components"]}
+    mv = cfg.get("measurement_validity", {}).get("heat_index")
+    if mv:
+        cols |= {mv["temperature_feature"], mv["heat_index_feature"]}
     return sorted(cols)
 
 
@@ -201,6 +205,19 @@ def fuse(F: pd.DataFrame, iso: pd.DataFrame | None, cfg: dict) -> tuple[pd.DataF
     A["if_signal_score"] = if_score.round(2)
     A["if_contribution"] = pd.Series(np.where(if_used, w_if * if_score, 0.0)).round(2)
 
+    # measurement validity: qualifies (never alters) the environmental evidence
+    mv = cfg.get("measurement_validity", {}).get("heat_index")
+    if mv:
+        A["heat_index_observed"] = F[mv["heat_index_feature"]].astype(float)
+        A["heat_index_validity"] = heat_index_validity(F[mv["temperature_feature"]], F[mv["heat_index_feature"]],
+                                                       mv["max_temperature_c"], mv["max_heat_index_c"])
+    else:
+        A["heat_index_observed"] = np.nan
+        A["heat_index_validity"] = "unavailable"
+    extrap = A["heat_index_validity"].eq("extrapolated")
+    A["measurement_flags"] = np.where(extrap, "heat_index_extrapolated", "")
+    A["alert_relies_on_extrapolated_heat_index"] = A["alert"] & extrap & A["environmental_elevated"]
+
     # explanations (long)
     rows = []
     for c in CATEGORIES:
@@ -214,7 +231,9 @@ def fuse(F: pd.DataFrame, iso: pd.DataFrame | None, cfg: dict) -> tuple[pd.DataF
             "observed_value": d["observed"], "baseline_median": d["baseline"], "robust_z": d["robust_z"].round(2),
             "cusum": d["cusum"].round(2), "staleness_hours": d["staleness_hours"],
             "elevated": elevated[c], "persistent": persistent[c], "component_scores": d["components"],
-            "note": _category_note(c, d, cfg),
+            "note": _category_note(c, d, cfg) + (np.where(
+                extrap, "; heat index outside NWS chart range (extrapolated) - magnitude unreliable", "")
+                if c == "environmental" else ""),
         }))
     rows.append(pd.DataFrame({
         **{k: F[k] for k in KEY}, "decision_time": F["decision_time"], "component": "isolation_forest",
@@ -284,6 +303,10 @@ def _explain(A: pd.DataFrame, cats: dict, cfg: dict) -> pd.Series:
         parts.append(f"Isolation Forest: {'+' + _fmt(r['if_contribution']) + ' points (out-of-sample)' if r['if_used'] else 'not used'}.")
         if r["n_health_elevated"] >= 1 and r["classification"] not in ALERT_CLASSES:
             parts.append("Note: health signal elevated but not corroborated/persistent - monitor.")
+        if r["heat_index_validity"] == "extrapolated":
+            parts.append(f"Measurement caution: heat index {_fmt(r['heat_index_observed'])} C is outside the NWS chart "
+                         "range (temperature <= 43.3 C, heat index <= 58.3 C); the value is an extrapolation and its "
+                         "magnitude is unreliable (environmental score saturates; classification is not based on it alone).")
         parts.append(f"Rule: {rule[r['classification']]}.")
         out.append(" ".join(parts))
     return pd.Series(out, index=A.index)

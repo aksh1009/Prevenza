@@ -88,8 +88,9 @@ def build_targets(labels: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 # ---------------------------------------------------------------------------------------------- inputs
 def build_frame(F: pd.DataFrame, A: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     """Decision-time inputs + eligibility + persistence baselines. Contains NO labels or targets."""
+    extra = [c for c in ("heat_index_validity",) if c in A.columns]
     fus = A[KEY + cfg["features"]["fusion"] + ["classification", "missing_sources", "stale_sources",
-                                                "evidence_level"]]
+                                                "evidence_level"] + extra]
     X = F[KEY + ["decision_time"] + cfg["features"]["as_of"]].merge(fus, on=KEY, how="left", validate="one_to_one")
     X["shift_start"] = _shift_start(X)
     order = X.sort_values(SERIES + ["observation_date"]).index
@@ -285,6 +286,7 @@ def forecast_table(D: pd.DataFrame, meta: dict, cfg: dict) -> pd.DataFrame:
     out["persistence_health_flag"] = D["persistence_health"]
     out["current_classification"] = D["classification"]
     out["evidence_level"] = D["evidence_level"]
+    out["heat_index_validity"] = D["heat_index_validity"] if "heat_index_validity" in D else "unavailable"
     out["n_inputs_missing"] = D["n_inputs_missing"]
     out["missing_inputs"] = D["missing_inputs"]
     out["missing_sources"] = D["missing_sources"]
@@ -303,6 +305,8 @@ def forecast_table(D: pd.DataFrame, meta: dict, cfg: dict) -> pd.DataFrame:
                 notes.append(f"missing: {r.missing_sources.replace(';', ', ')}")
             if r.stale_sources:
                 notes.append(f"stale: {r.stale_sources.replace(';', ', ')}")
+            if r.heat_index_validity == "extrapolated":
+                notes.append("heat index outside NWS chart range (extrapolated input, magnitude unreliable)")
             if r.evidence_level != "adequate":
                 notes.append(f"evidence {r.evidence_level}")
             if r.in_sample:
