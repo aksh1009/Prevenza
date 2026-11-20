@@ -1,0 +1,146 @@
+{
+  "model_version": "cbc90f8203b9",
+  "features": [
+    "heat_index_celsius_last",
+    "heat_index_celsius_rz",
+    "heat_index_celsius_cusum",
+    "heat_index_celsius_slope7",
+    "heat_index_celsius_roll3",
+    "heat_exposure_load_roll3",
+    "heat_exposure_load_cusum",
+    "average_exposure_hours_rz",
+    "heat_related_visits_rz",
+    "heat_related_visits_cusum",
+    "absence_rate_rz",
+    "absence_rate_cusum",
+    "heat_incident_count_rz",
+    "heat_incident_count_cusum",
+    "completeness_window7",
+    "clin_staleness_hours",
+    "abs_staleness_hours",
+    "ctx_outdoor",
+    "ctx_radiant_heat",
+    "ctx_work_intensity",
+    "ctx_night_shift",
+    "risk_score",
+    "environmental_score",
+    "workforce_exposure_score",
+    "clinical_score",
+    "absenteeism_score",
+    "incidents_score",
+    "available_weight"
+  ],
+  "selected_C": 0.01,
+  "C_grid": [
+    {
+      "C": 0.01,
+      "validation_average_precision": 0.6597605861615488
+    },
+    {
+      "C": 0.1,
+      "validation_average_precision": 0.5937994321579687
+    },
+    {
+      "C": 1.0,
+      "validation_average_precision": 0.522216234438317
+    }
+  ],
+  "threshold": 0.6659486207373603,
+  "threshold_source": "max F1 on validation (train-only model)",
+  "train_rows": 540,
+  "train_positives": 93,
+  "validation_rows": 306,
+  "validation_positives": 24,
+  "final_fit_rows": 846,
+  "refit_on_train_validation": true,
+  "config": {
+    "target": {
+      "horizon_hours": 24,
+      "positive_labels": [
+        1,
+        2
+      ]
+    },
+    "split": {
+      "train_fraction": 0.5,
+      "validation_fraction": 0.2,
+      "purge_hours": 24
+    },
+    "eligibility": {
+      "warmup_observations": 14,
+      "min_available_weight": 0.4
+    },
+    "features": {
+      "as_of": [
+        "heat_index_celsius_last",
+        "heat_index_celsius_rz",
+        "heat_index_celsius_cusum",
+        "heat_index_celsius_slope7",
+        "heat_index_celsius_roll3",
+        "heat_exposure_load_roll3",
+        "heat_exposure_load_cusum",
+        "average_exposure_hours_rz",
+        "heat_related_visits_rz",
+        "heat_related_visits_cusum",
+        "absence_rate_rz",
+        "absence_rate_cusum",
+        "heat_incident_count_rz",
+        "heat_incident_count_cusum",
+        "completeness_window7",
+        "clin_staleness_hours",
+        "abs_staleness_hours",
+        "ctx_outdoor",
+        "ctx_radiant_heat",
+        "ctx_work_intensity",
+        "ctx_night_shift"
+      ],
+      "fusion": [
+        "risk_score",
+        "environmental_score",
+        "workforce_exposure_score",
+        "clinical_score",
+        "absenteeism_score",
+        "incidents_score",
+        "available_weight"
+      ]
+    },
+    "persistence": {
+      "health_classes": [
+        "Emerging health risk",
+        "High health risk"
+      ],
+      "any_classes": [
+        "Environmental warning",
+        "Elevated occupational exposure",
+        "Emerging health risk",
+        "High health risk"
+      ]
+    },
+    "logistic_regression": {
+      "C_grid": [
+        0.01,
+        0.1,
+        1.0
+      ],
+      "class_weight": "balanced",
+      "max_iter": 2000,
+      "random_state": 42,
+      "refit_on_train_validation": true
+    },
+    "threshold": {
+      "selection": "max_f1_on_validation"
+    },
+    "xgboost": {
+      "enabled": false
+    },
+    "output": {
+      "model_dir": "models/forecast",
+      "forecasts_file": "forecast_results.parquet",
+      "evaluation_file": "forecast_evaluation.parquet"
+    }
+  },
+  "versions": {
+    "sklearn": "1.9.1",
+    "numpy": "2.4.6"
+  }
+}

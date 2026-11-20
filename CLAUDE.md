@@ -61,6 +61,8 @@ data_generation -> raw CSV -> preprocessing -> processed Parquet (full key grid 
   categories are excluded and listed, never scored 0; environmental evidence alone never yields a health class;
   Isolation Forest contributes only on out-of-sample (eval) rows. Pipeline order: generate -> features.build ->
   isolation_forest -> risk_fusion -> evaluation.backtest (replays every decision time; config/backtest.yaml).
+- Forecasting: `python -m src.forecasting.forecast` (config/forecast.yaml). Targets come from future labels;
+  inputs only from decision-time features/fusion. Scores are uncalibrated - never call them probabilities.
 - Backtest metrics are SYNTHETIC validation only. Never tune thresholds on ground-truth events; never quote a
   metric not present in docs/backtesting_report.md.
 - Generated docs (`docs/simulation_summary.md`, `docs/isolation_forest_report.md`, `docs/risk_fusion_report.md`, `docs/data_quality_report.md`, `docs/data_dictionary.md`,

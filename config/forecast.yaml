@@ -1,0 +1,72 @@
+# PREVENZA — Phase 4B short-term (24 h) heat-risk forecasting.
+# Target: will the site-zone be in an emerging/escalating labelled state in any observation starting within the
+# next `horizon_hours` (built from FUTURE ground-truth labels, for training/evaluation only).
+# Inputs: only as-of features and risk-fusion outputs available at the current decision timestamp.
+# Outputs are uncalibrated forecast scores, NOT probabilities, and NOT individual clinical risk.
+
+target:
+  horizon_hours: 24             # observations of the same site-zone (both shifts) with shift_start in (t_start, t_start + 24 h]
+  positive_labels: [1, 2]
+
+split:                          # chronological fractions of observation dates (fixed a priori; never random)
+  train_fraction: 0.5
+  validation_fraction: 0.2      # remainder = test
+  purge_hours: 24               # drop rows whose target window crosses into the next split
+
+eligibility:
+  warmup_observations: 14       # no baseline before this (Phase 3A)
+  min_available_weight: 0.4     # fusion evidence below this -> not forecast (insufficient evidence)
+
+features:
+  as_of:                        # from data/processed/features.parquet
+    - heat_index_celsius_last
+    - heat_index_celsius_rz
+    - heat_index_celsius_cusum
+    - heat_index_celsius_slope7
+    - heat_index_celsius_roll3
+    - heat_exposure_load_roll3
+    - heat_exposure_load_cusum
+    - average_exposure_hours_rz
+    - heat_related_visits_rz
+    - heat_related_visits_cusum
+    - absence_rate_rz
+    - absence_rate_cusum
+    - heat_incident_count_rz
+    - heat_incident_count_cusum
+    - completeness_window7
+    - clin_staleness_hours
+    - abs_staleness_hours
+    - ctx_outdoor
+    - ctx_radiant_heat
+    - ctx_work_intensity
+    - ctx_night_shift
+  fusion:                       # from data/processed/risk_assessments.parquet (deterministic, as-of)
+    - risk_score
+    - environmental_score
+    - workforce_exposure_score
+    - clinical_score
+    - absenteeism_score
+    - incidents_score
+    - available_weight
+
+persistence:
+  health_classes: ["Emerging health risk", "High health risk"]
+  any_classes: ["Environmental warning", "Elevated occupational exposure", "Emerging health risk", "High health risk"]
+
+logistic_regression:
+  C_grid: [0.01, 0.1, 1.0]      # selected on VALIDATION average precision
+  class_weight: balanced        # handles class imbalance
+  max_iter: 2000
+  random_state: 42
+  refit_on_train_validation: true   # final model refit on train+validation with selected C; threshold from validation
+
+threshold:
+  selection: max_f1_on_validation   # decision threshold on the forecast score, chosen on validation only
+
+xgboost:
+  enabled: false                # not justified: training data holds one escalating event (3 zones); see report
+
+output:
+  model_dir: models/forecast
+  forecasts_file: forecast_results.parquet
+  evaluation_file: forecast_evaluation.parquet
