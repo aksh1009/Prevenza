@@ -5,3 +5,7 @@ __pycache__/
 
 # presentations stay local
 *.pptx
+
+# submission deck exports stay local
+Prevenza_DoubleA_FHDIC_Submission.pdf
+*.mp4
