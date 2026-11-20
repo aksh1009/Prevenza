@@ -58,6 +58,42 @@ evidence is too thin to call.
 | **Model evaluation** | Backtests against ground truth on identical out-of-sample windows · confusion matrices · lead-time dumbbell · audit findings |
 | **Data quality & reliability** | Valid / missing / stale / invalid / insufficient evidence · latency · staleness · reliability distribution |
 
+### A tour of the app
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<b>🔎 Site &amp; zone monitoring</b><br>
+<sub>Risk trajectory, thermal reading on NWS heat bands, day/night tiles and five synchronised evidence streams.</sub><br><br>
+<img src="docs/screenshots/readme_monitoring.png" alt="Site and zone monitoring page">
+</td>
+<td width="50%" valign="top">
+<b>🚨 Alert investigation</b><br>
+<sub>Every alert episode, the evidence at first detection and how each category moved the score.</sub><br><br>
+<img src="docs/screenshots/readme_alerts.png" alt="Alert investigation page">
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<b>📈 24-hour forecasting</b><br>
+<sub>Uncalibrated ranking beside the persistence baseline, with eligibility and data caveats.</sub><br><br>
+<img src="docs/screenshots/readme_forecasting.png" alt="24-hour forecasting page">
+</td>
+<td width="50%" valign="top">
+<b>⚖️ Model evaluation</b><br>
+<sub>Direction-aware benchmark table and confusion matrices on identical out-of-sample rows.</sub><br><br>
+<img src="docs/screenshots/readme_evaluation.png" alt="Model evaluation page">
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+<b>🧪 Data quality &amp; reliability</b><br>
+<sub>Missing ≠ zero, missing ≠ normal: availability, missingness, latency and the five data states made visible.</sub><br><br>
+<img src="docs/screenshots/readme_data-quality.png" alt="Data quality and reliability page">
+</td>
+</tr>
+</table>
+
 ## How it works
 
 ```mermaid
@@ -106,6 +142,22 @@ Thresholds were fixed **before** evaluation and never tuned on test events.
 | Heat events detected | 80 % | **100 %** |
 | Median warning before escalation | +5 h | **+95 h** |
 | 24 h forecast F1 on the unseen event (vs persistence) | 0.24 | **0.35** |
+
+<div align="center">
+<img src="docs/figures/event_timelines.png" alt="Event timelines: risk score and alerts from each model around every simulated event" width="820">
+<br><sub>Every simulated event, its emerging and escalating phases, and when each model alerted.</sub>
+</div>
+<br>
+<table>
+<tr>
+<td width="50%"><img src="docs/figures/lead_times.png" alt="Lead time to escalation per event-zone and model"><br><sub>Lead time to escalation per event-zone</sub></td>
+<td width="50%"><img src="docs/figures/precision_recall.png" alt="Precision, recall, F1, event sensitivity and episode PPV per model"><br><sub>Precision / recall comparison (out-of-sample window)</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/figures/confusion_matrix.png" alt="Observation-level confusion matrices"><br><sub>Observation-level confusion matrices</sub></td>
+<td width="50%"><img src="docs/figures/forecast_pr_curve.png" alt="24-hour forecast precision-recall curve against persistence baselines"><br><sub>24 h forecast vs persistence on held-out data</sub></td>
+</tr>
+</table>
 
 **Read it honestly:** fusion cuts alert noise by ~85 % and ignores one-off spikes, but it warns later, misses the
 radiant-heat foundry event, and the 24-hour forecast shows no gain over simply carrying today's warning forward. Full
