@@ -12,7 +12,7 @@ REQUIRED_DIRS = [
     *[f"src/{m}" for m in ("data_generation", "preprocessing", "features", "detection", "forecasting",
                             "explainability", "recommendations", "evaluation")],
 ]
-REQUIRED_FILES = ["CLAUDE.md", "requirements.txt", "docs/architecture.md", "docs/data_dictionary.md",
+REQUIRED_FILES = ["README.md", "requirements.txt", "docs/architecture.md", "docs/data_dictionary.md",
                   "config/settings.yaml", "config/simulation.yaml"]
 
 
