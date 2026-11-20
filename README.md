@@ -7,13 +7,6 @@
 **An explainable, privacy-preserving early-warning system for population & workforce health**
 Future Health Digital Innovation Challenge · Team **Double A**
 
-![Python](https://img.shields.io/badge/Python-3.11-0F172A?style=flat-square&logo=python&logoColor=67C1D6)
-![Streamlit](https://img.shields.io/badge/Streamlit-dashboard-0F172A?style=flat-square&logo=streamlit&logoColor=67C1D6)
-![scikit-learn](https://img.shields.io/badge/scikit--learn-models-0F172A?style=flat-square&logo=scikitlearn&logoColor=67C1D6)
-![Tests](https://img.shields.io/badge/tests-264%20passing-15803D?style=flat-square)
-![Replay](https://img.shields.io/badge/replay-1%2C620%2F1%2C620%20identical-0E7490?style=flat-square)
-![Data](https://img.shields.io/badge/data-100%25%20synthetic-D97706?style=flat-square)
-
 <img src="docs/screenshots/readme_home.png" alt="Prevenza front page: wordmark, claim and the simulation's peak-risk moment" width="900">
 
 </div>
